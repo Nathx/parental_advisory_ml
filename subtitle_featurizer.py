@@ -1,4 +1,25 @@
 from collections import OrderedDict
+import xmltodict
+import gzip
+
+def parse_xml(file_name):
+    if file_name.endswith('.gz'):
+        f = gzip.open(file_name, 'r')
+    else:
+        f=open(file_name,'r')
+    xml=''
+
+    while True:
+        line=f.readline()
+        if line=='':
+            break
+        xml+=line.strip()
+    try:
+        xml_dict = xmltodict.parse(xml)
+    except:
+        print xml
+        return
+    return xml_dict
 
 def extract_row(row):
     row_id, times, words = [], [], []
