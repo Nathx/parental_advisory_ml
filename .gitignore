@@ -2,3 +2,5 @@ OpenSubtitles2016/
 *.ipynb
 *.pyc
 Movier/
+data-movies/
+data/
