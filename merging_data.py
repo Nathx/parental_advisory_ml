@@ -32,9 +32,8 @@ def closest_title(title, df):
         return ''
 
 
-    return edit_distance(title_strip(row.TITLE), title_strip(row.closest_title)) / float(min(len(row.TITLE), len(row.closest_title)) + 1)
-
 def series_edit_distance(df, col1, col2):
+
 
     def real_distance(row):
         return edit_distance(row[col1], row[col2]) / float(min(len(row[col1]), len(row[col2])) + 1)
