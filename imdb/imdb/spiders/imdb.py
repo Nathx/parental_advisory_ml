@@ -13,6 +13,8 @@ class ImdbSpider(Spider):
     def start_requests(self):
         with open('/Users/nathankiner/galvanize/NLP_subs_project/data/crawl_ids.pkl', 'r') as f:
             crawl_ids = pkl.load(f)
+        existing_ids = h.fetch_ids()
+        crawl_ids = [id for id in crawl_ids if id not in existing_ids]
         url = 'http://www.imdb.com/title/tt%s/parentalguide'
 
         for c_id in crawl_ids:

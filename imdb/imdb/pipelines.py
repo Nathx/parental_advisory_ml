@@ -24,5 +24,6 @@ class MongoDBPipeline(object):
         self.collection = db[settings['MONGODB_COLLECTION']]
 
     def process_item(self, item, spider):
-        self.collection.insert(dict(item))
+        if not self.collection.find_one({'imdb_id': item['imdb_id']}):
+            self.collection.insert(item)
         return item
