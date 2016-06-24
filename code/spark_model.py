@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
+import socket
 from document import Document
-
 import pyspark as ps
 from pyspark.mllib.feature import HashingTF
 from pyspark.mllib.regression import LabeledPoint
@@ -13,7 +13,7 @@ from pyspark.ml.feature import IDF
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, subset=''):
+    def __init__(self, sc, conn, subset='', n_subs=0):
         self.context = sc
         self.conn = conn
         self.bucket = conn.get_bucket('subtitle_project')
@@ -21,6 +21,8 @@ class SparkModel(object):
         self.path_to_files = 'data/xml/en/' + subset
 
         self.labeled_paths = self.map_files()
+        if n_subs:
+          self.labeled_paths = self.labeled_paths[:n_subs]
         self.RDD = self.process_files()
         self.tfidf = self.extract_tfidf()
 
