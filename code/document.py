@@ -1,4 +1,6 @@
 from boto.s3.key import Key
+import socket
+import sys
 import xmltodict
 from collections import OrderedDict
 import gzip
