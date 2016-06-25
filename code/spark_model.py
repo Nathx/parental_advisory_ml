@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from document import Document
 import pyspark as ps
+import os
 from pyspark.mllib.feature import HashingTF
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.linalg import Vectors
@@ -12,7 +13,7 @@ from pyspark.ml.feature import IDF
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, subset='', n_subs=0, feat='tfidf', test_size=.2):
+    def __init__(self, sc, conn, path, subset='', n_subs=0, feat='tfidf', test_size=.2):
         # store parameters
         self.context = sc
         self.conn = conn
@@ -21,10 +22,12 @@ class SparkModel(object):
         self.test_size = test_size
 
         # find subtitle files
-        self.bucket = conn.get_bucket('subtitle_project')
-        self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
-        self.path_to_files = 'data/xml/en/' + subset
-        self.labeled_paths = self.map_files(self.n_subs)
+        # self.bucket = conn.get_bucket('subtitle_project')
+        # self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
+        # self.path_to_files = 'data/xml/en/' + subset
+        self.path = path
+        self.labeled_paths = self.map_local_files(self.path, self.n_subs)
+        # self.labeled_paths = self.map_files(self.n_subs)
         if n_subs == 0:
             self.n_subs = n_subs
 
@@ -64,6 +67,33 @@ class SparkModel(object):
 
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths[key] = rating
+
+            if len(labeled_paths) == n_subs:
+                break
+
+        return labeled_paths.items()
+
+    def map_local_files(self, path, n_subs=0):
+        """
+        Loops over the directory and grabs the filepath for each valid sub_id.
+        """
+        labels = self.extract_labels()
+
+        labeled_paths = {}
+
+        sub_ids = labels.IDSubtitle.astype(str).values
+        ratings = labels.RATING.values
+
+        for root, dirs, names in os.walk(path):
+
+            # filename = key.name.encode('utf-8').split('/')[-1]
+            # file_id = filename.split('.')[0]
+            for filename in names:
+                file_id = filename.split('.')[0]
+                if (file_id in sub_ids):
+                    key = os.path.join(root, filename)
+                    rating = ratings[np.where(sub_ids == file_id)][0]
+                    labeled_paths[key] = rating
 
             if len(labeled_paths) == n_subs:
                 break
