@@ -22,8 +22,8 @@ class SparkModel(object):
         self.test_size = test_size
 
         # find subtitle files
-        # self.bucket = conn.get_bucket('subtitle_project')
-        # self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
+        self.bucket = conn.get_bucket('subtitle_project')
+        self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
         # self.path_to_files = 'data/xml/en/' + subset
         self.path = path
         self.labeled_paths = self.map_local_files(self.path, self.n_subs)
@@ -67,7 +67,7 @@ class SparkModel(object):
 
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths.append((key, rating))
-        
+
         if n_subs > 0:
             np.random.shuffle(labeled_paths)
             return labeled_paths[:n_subs]
@@ -75,32 +75,33 @@ class SparkModel(object):
 
         return labeled_paths
 
-    def map_local_files(self, path, n_subs=0):
+    def map_local_files(self, path, n_subs=0, shuffle=False):
         """
         Loops over the directory and grabs the filepath for each valid sub_id.
         """
         labels = self.extract_labels()
 
-        labeled_paths = {}
+        labeled_paths = []
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
 
-        for root, dirs, names in os.walk(path):
+        for root, dirs, files in os.walk(path):
 
-            # filename = key.name.encode('utf-8').split('/')[-1]
-            # file_id = filename.split('.')[0]
-            for filename in names:
+            for filename in files:
                 file_id = filename.split('.')[0]
                 if (file_id in sub_ids):
-                    key = os.path.join(root, filename)
+                    key = os.path.abspath(os.path.join(root, filename))
                     rating = ratings[np.where(sub_ids == file_id)][0]
-                    labeled_paths[key] = rating
+                    labeled_paths.append((key, rating))
+            if not shuffle and len(labeled_paths) >= n_subs:
+                return labeled_paths[:n_subs]
 
-            if len(labeled_paths) == n_subs:
-                break
+        if shuffle and n_subs > 0:
+            np.random.shuffle(labeled_paths)
+            return labeled_paths[:n_subs]
 
-        return labeled_paths.items()
+        return labeled_paths
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
@@ -116,15 +117,21 @@ class SparkModel(object):
         key: (label, filepath)
         value: list of tokens.
         """
-        rdd = self.context.parallelize(
-                self.labeled_paths).map(lambda (key, label):
-                                        (key.name, Document(key, label)))
+        label_map = dict(self.labeled_paths)
+        rdd = self.context.wholeTextFiles(','.join(label_map.keys())).map(lambda (key, fileobj):
+                                                            (key[5:], Document(fileobj, label_map[key[5:]])))
+
+        # rdd = self.context.parallelize(
+        #         self.labeled_paths).map(lambda (key, label):
+        #                                 (key.name, Document(key, label)))
 
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
 
         # update list of paths
+        # self.labeled_paths = [(key, label) for key, label in self.labeled_paths
+        #                                     if key.name in clean_rdd.keys().collect()]
         self.labeled_paths = [(key, label) for key, label in self.labeled_paths
-                                            if key.name in clean_rdd.keys().collect()]
+                                            if key in clean_rdd.keys().collect()]
         return clean_rdd
 
     def extract_features(self, feat='tfidf', num_features=10000, minDocFreq=1):
@@ -164,7 +171,8 @@ class SparkModel(object):
     def get_labeled_points(self, features):
         if self.feat == 'tfidf':
             unique_ratings = list(np.unique(zip(*self.labeled_paths)[1]))
-            label_map = dict((k.name, unique_ratings.index(v)) for k, v in self.labeled_paths)
+            # label_map = dict((k.name, unique_ratings.index(v)) for k, v in self.labeled_paths)
+            label_map = dict((k, unique_ratings.index(v)) for k, v in self.labeled_paths)
             return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
     def eval_score(self):
@@ -181,7 +189,8 @@ class SparkModel(object):
 
     def make_train_test(self, test_size):
         n_test = int(test_size*self.n_subs)
-        filenames = [key.name for key, label in self.labeled_paths]
+        # filenames = [key.name for key, label in self.labeled_paths]
+        filenames = [key for key, label in self.labeled_paths]
         np.random.shuffle(filenames)
         self.test_paths = filenames[:n_test]
         self.train_paths = filenames[n_test:]
