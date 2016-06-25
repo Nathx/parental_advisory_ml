@@ -26,7 +26,7 @@ class Document(object):
 
     def load_file(self):
         if type(self.key) == Key:
-            filename = 'file.xml'
+            filename = 'file.xml.gz'
             self.key.get_contents_to_filename('file.xml.gz')
             if self.key.name.endswith('.gz'):
                 return gzip.GzipFile(fileobj=open(filename, 'rb'))
@@ -76,8 +76,6 @@ class Document(object):
             return sentences
         else:
             doc = self.parsed_xml['document']
-
-
 
         if 's' in doc.keys():
             sub_content = doc['s']

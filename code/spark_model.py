@@ -47,13 +47,13 @@ class SparkModel(object):
         labeled_df['IDSubtitle'] = labeled_df['IDSubtitle'].astype(int)
         return labeled_df
 
-    def map_files(self, n_subs=-1):
+    def map_files(self, n_subs=0):
         """
         Loops over the directory and grabs the filepath for each valid sub_id.
         """
         labels = self.extract_labels()
 
-        labeled_paths = {}
+        labeled_paths = []
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
@@ -66,12 +66,14 @@ class SparkModel(object):
             if (file_id in sub_ids):
 
                 rating = ratings[np.where(sub_ids == file_id)][0]
-                labeled_paths[key] = rating
+                labeled_paths.append((key, rating))
+        
+        if n_subs > 0:
+            np.random.shuffle(labeled_paths)
+            return labeled_paths[:n_subs]
 
-            if len(labeled_paths) == n_subs:
-                break
 
-        return labeled_paths.items()
+        return labeled_paths
 
     def map_local_files(self, path, n_subs=0):
         """
