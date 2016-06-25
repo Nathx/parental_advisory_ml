@@ -53,21 +53,26 @@ class Document(object):
         # except:
         #     return {}
 
-        xml=''
+#       xml=''
 
 
 
-        line = f.readline()
+#       line = f.readline()
 
-        while line:
-            xml += line.strip()
-            line = f.readline()
+#       while line:
+#           xml += line.strip()
+#           try:
+#               line = f.readline()
+#           except:
+#               ip = socket.gethostbyname(socket.gethostname())
+#                filename = self.key.name
+#               raise IOError('Unzipping error - IP: %s, file: %s' % (ip, filename))
 
-        try:
-            xml_dict = xmltodict.parse(xml)
-        except:
-            print xml
-            return
+#        try:
+        xml_dict = xmltodict.parse(f)
+#        except:
+#            print xml
+#            return
 
         f.close()
 
@@ -89,11 +94,11 @@ class Document(object):
         """
         Returns subtitle as a list of triplets (id, timestamps, words).
         """
-        if 'document' in self.parsed_xml.keys():
-            doc = self.parsed_xml['document']
-        else:
-            return []
         sentences = []
+        try:
+            doc = self.parsed_xml['document']
+        except AttributeError, KeyError:
+            return sentences
 
         if 's' in doc.keys():
             for row in doc['s']:
