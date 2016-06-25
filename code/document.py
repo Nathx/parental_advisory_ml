@@ -1,6 +1,5 @@
 from boto.s3.key import Key
 import socket
-import sys
 import xmltodict
 from collections import OrderedDict
 import gzip
@@ -13,6 +12,7 @@ class Document(object):
     def __init__(self, key, label):
         self.label = label
         self.key = key
+        self.corrupted = False
 
         self.parsed_xml = self.parse_xml()
         self.contents = self.extract_sub()
@@ -26,8 +26,8 @@ class Document(object):
 
     def load_file(self):
         if type(self.key) == Key:
-            filename = 'file.xml'
-            self.key.get_contents_to_filename('file.xml')
+            filename = 'file.xml.gz'
+            self.key.get_contents_to_filename('file.xml.gz')
             if self.key.name.endswith('.gz'):
                 return gzip.GzipFile(fileobj=open(filename, 'rb'))
             else:
@@ -45,36 +45,13 @@ class Document(object):
         Loads XML file and converts to OrderedDict
         """
         f = self.load_file()
-        # if self.key.name == 'subtitle_project,data/xml/en/1969/65063/59688.xml.gz':
-        #     print f.read()
-
-        # try:
-        #     return xmltodict.parse(f.read())
-        # except:
-        #     return {}
-
-#       xml=''
-
-
-
-#       line = f.readline()
-
-#       while line:
-#           xml += line.strip()
-#           try:
-#               line = f.readline()
-#           except:
-#               ip = socket.gethostbyname(socket.gethostname())
-#                filename = self.key.name
-#               raise IOError('Unzipping error - IP: %s, file: %s' % (ip, filename))
-
-#        try:
-        xml_dict = xmltodict.parse(f)
-#        except:
-#            print xml
-#            return
-
-        f.close()
+        try:
+            xml_dict = xmltodict.parse(f)
+        except:
+            self.corrupted = True
+            xml_dict = []
+        finally:
+            f.close()
 
         return xml_dict
 
@@ -95,14 +72,17 @@ class Document(object):
         Returns subtitle as a list of triplets (id, timestamps, words).
         """
         sentences = []
-        try:
-            doc = self.parsed_xml['document']
-        except AttributeError, KeyError:
+        if self.corrupted:
             return sentences
+        else:
+            doc = self.parsed_xml['document']
 
         if 's' in doc.keys():
-            for row in doc['s']:
+            sub_content = doc['s']
+            for row in sub_content:
                 sentences.append(self.extract_row(row))
+        else:
+            self.corrupted = True
 
         return sentences
 
