@@ -11,10 +11,10 @@ class Document(object):
 
     def __init__(self, key, label):
         self.label = label
-        self.key = key
+        # self.key = key
         self.corrupted = False
 
-        self.parsed_xml = self.parse_xml()
+        self.parsed_xml = self.parse_xml(key)
         self.contents = self.extract_sub()
 
     def get_sub(self):
@@ -40,7 +40,7 @@ class Document(object):
                 return open(filename,'r')
 
 
-    def parse_xml(self):
+    def load_parse_xml(self):
         """
         Loads XML file and converts to OrderedDict
         """
@@ -52,6 +52,18 @@ class Document(object):
             xml_dict = []
         finally:
             f.close()
+
+        return xml_dict
+
+    def parse_xml(self, f):
+        """
+        Loads XML file and converts to OrderedDict
+        """
+
+        xml_dict = xmltodict.parse(f)
+        # except:
+        #     self.corrupted = True
+        #     xml_dict = []
 
         return xml_dict
 
