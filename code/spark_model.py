@@ -63,10 +63,10 @@ class SparkModel(object):
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
-        if n_subs > 0:
+        if n_subs > -1:
             for key in self.bucket.list(prefix=self.path_to_files):
 
-                file_id = extract_id(key)
+                file_id = self.extract_id(key)
 
                 if (file_id in sub_ids):
                     rating = ratings[np.where(sub_ids == file_id)][0]
@@ -76,8 +76,8 @@ class SparkModel(object):
                         return labeled_paths
         else:
             # same as above, but parallelized
-            return sm.context.parallelize(sm.bucket.list(
-                prefix=sm.path_to_files)).map(lambda key:
+            return self.context.parallelize(self.bucket.list(
+                prefix=self.path_to_files)).map(lambda key:
                     (key, self.extract_id(key))).filter(lambda (key, file_id):
                         file_id in sub_ids).map(lambda (key, file_id):
                                 (key, ratings[np.where(file_id == sub_ids)][0])).collect()
