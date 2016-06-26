@@ -32,8 +32,8 @@ class Document(object):
                 self.key.get_contents_to_filename('file.xml.gz')
                 return gzip.GzipFile(fileobj=open(filename, 'rb'))
             else:
-                xml_file = StringIO()
-                self.key.get_contents_to_file(xml_file)
+                filename = 'file.xml'
+                self.key.get_contents_to_filename('file.xml')
                 return open(filename,'r')
         else:
             filename = self.key
