@@ -60,17 +60,20 @@ class SparkModel(object):
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
 
+        i = 0
         for key in self.bucket.list(prefix=self.path_to_files):
 
             filename = key.name.encode('utf-8').split('/')[-1]
             file_id = filename.split('.')[0]
 
             if (file_id in sub_ids):
-
+                i += 1
+                if shuffle:
+                    draw = np.random.random()
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths[key] = rating
 
-                if not shuffle and len(labeled_paths) == n_subs:
+                if len(labeled_paths) == n_subs:
                     return labeled_paths
 
         if n_subs > 0:
@@ -199,8 +202,8 @@ class SparkModel(object):
 
         elif self.model_type == 'log_reg':
             n_classes = len(self.unique_ratings())
-            features = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label, lp.features.toArray())))
-            logreg = LogisticRegressionWithLBFGS.train(train_rdd.values(), iterations=10, numClasses=n_classes)
+            features = train_rdd.map(lambda lp: LabeledPoint(lp.label, lp.features.toArray()))
+            logreg = LogisticRegressionWithLBFGS.train(features, iterations=10, numClasses=n_classes)
             self.model = logreg
 
         return self
