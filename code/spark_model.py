@@ -91,7 +91,7 @@ class SparkModel(object):
             for filename in files:
                 file_id = filename.split('.')[0]
                 if (file_id in sub_ids):
-                    key = os.path.abspath(os.path.join(root, filename))
+                    key = os.path.join(root, filename)
                     rating = ratings[np.where(sub_ids == file_id)][0]
                     labeled_paths.append((key, rating))
             if not shuffle and len(labeled_paths) >= n_subs:
