@@ -19,6 +19,15 @@ class Document(object):
         self.parsed_xml = self.parse_xml()
         self.contents = self.extract_sub()
 
+        self.contractions = re.compile(r"|-|\"")
+        # all non alphanumeric
+        self.symbols = re.compile(r'(\W+)', re.U)
+        # single character removal
+        self.singles = re.compile(r'(\s\S\s)', re.I|re.U)
+        # separators (any whitespace)
+        self.seps = re.compile(r'\s+')
+        self.compiler = re.compile('\w+')
+
     def get_sub(self):
         """Returns subtitle from file if it exists."""
         try:
@@ -27,35 +36,16 @@ class Document(object):
             print sub.keys()
 
     def load_file(self):
-        if type(self.key) == Key:
-            if self.key.name.endswith('.gz'):
-                filename = 'file.xml.gz'
-                self.key.get_contents_to_filename('file.xml.gz')
-                return gzip.GzipFile(fileobj=open(filename, 'rb'))
-            else:
-                filename = 'file.xml'
-                self.key.get_contents_to_filename('file.xml')
-                return open(filename,'r')
-        else:
-            filename = self.key
-            if filename.endswith('.gz'):
-                return gzip.GzipFile(fileobj=open(filename, 'rb'))
-            else:
-                return open(filename,'r')
+        data = self.key.get_contents_as_string()
+        return data
 
 
     def parse_xml(self):
         """
         Loads XML file and converts to OrderedDict
         """
-        f = self.load_file()
-        try:
-            xml_dict = xmltodict.parse(f)
-        except:
-            self.corrupted = True
-            xml_dict = []
-        finally:
-            f.close()
+        data = self.load_file()
+        xml_dict = xmltodict.parse(data)
 
         return xml_dict
 
@@ -97,12 +87,19 @@ class Document(object):
         elif type(elem) == OrderedDict:
             return [elem.get(field, '')]
 
+    def clean(self, text):
+        text = text.lower()
+        text = self.contractions.sub('', text)
+        text = self.symbols.sub(r' \1 ', text)
+        text = self.singles.sub(' ', text)
+        text = self.seps.sub(' ', text)
+        return text
+
     def get_bag_of_words(self):
         """Returns list of all words."""
         all_words = []
-        COMPILER = re.compile('\w+')
         for id, t, sentence in self.contents:
-            all_words += [w.lower() for w in COMPILER.findall(words) for words in sentence]
+            all_words += [self.clean(w) for words in sentence for w in self.compiler.findall(words)]
         return all_words
 
     def get_tagged_doc(self):
