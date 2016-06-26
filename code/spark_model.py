@@ -190,7 +190,7 @@ class SparkModel(object):
         elif model == 'log_reg':
             one_vs_all = []
             for i, rating in enumerate(self.unique_ratings()):
-                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.feature)))
+                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.features)))
                 logreg = LogisticRegressionWithLBFGS.train(train_rdd, iterations=10)
                 logreg.clearThreshold()
                 one_vs_all.append(logreg)
