@@ -4,7 +4,11 @@ import xmltodict
 from collections import OrderedDict
 from gensim.models.doc2vec import TaggedDocument
 import re
+import logging
 import gzip
+
+logger.getLogger(_name_)
+# logger.setLevel(logging.DEBUG)
 
 class Document(object):
     """
@@ -54,7 +58,10 @@ class Document(object):
         """
         row_id, times, words = [], [], []
         if '@id' in row:
-            row_id = row['@id']
+            try:
+                row_id = row['@id']
+            except:
+                logging.info("Issue reading row: %s in file %s" % (row, self.key.name))
         if 'time' in row:
             times = self.flatten_row(row['time'], '@value')
         if 'w' in row:
