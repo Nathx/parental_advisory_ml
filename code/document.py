@@ -2,6 +2,7 @@ from boto.s3.key import Key
 import socket
 import xmltodict
 from collections import OrderedDict
+from gensim.models.doc2vec import TaggedDocument
 import gzip
 
 class Document(object):
@@ -97,6 +98,9 @@ class Document(object):
         """Returns list of all words."""
         return [word for id, t, sentence in self.contents for word in sentence]
 
+    def get_tagged_doc(self):
+        """Returns tagged document as required by doc2vec."""
+        return TaggedDocument(self.get_bag_of_words(), self.label)
 
     def parse_nb(self):
         """
