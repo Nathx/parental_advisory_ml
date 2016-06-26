@@ -3,6 +3,7 @@ import socket
 import xmltodict
 from collections import OrderedDict
 from gensim.models.doc2vec import TaggedDocument
+import re
 import gzip
 
 class Document(object):
