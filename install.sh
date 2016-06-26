@@ -16,17 +16,17 @@ pip2.7 install jinja2==2.7.3
 pip2.7 install tornado==4.2
 
 pip2.7 install numpy
-pip2.7 install matplotlib
-pip2.7 install nltk
+# pip2.7 install matplotlib
+# pip2.7 install nltk
 pip2.7 install pandas
 pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
 
 # EBS volume is mounted at /vol0, not enough room on root drive for NLTK data
-mkdir /vol0/nltk_data
-python27 -m nltk.downloader -d /vol0/nltk_data/ all
-echo 'export NLTK_DATA="/vol0/nltk_data"' >> ~/.bash_profile
+# mkdir /vol0/nltk_data
+# python27 -m nltk.downloader -d /vol0/nltk_data/ all
+# echo 'export NLTK_DATA="/vol0/nltk_data"' >> ~/.bash_profile
 echo 'export SPARK_HOME=/root/spark' >> ~/.bash_profile
 echo 'export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/build:$PYTHONPATH' >> ~/.bash_profile
 
