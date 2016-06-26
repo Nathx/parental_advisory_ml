@@ -74,6 +74,7 @@ class SparkModel(object):
 
                     if len(labeled_paths) == n_subs:
                         return labeled_paths
+            return labeled_paths
         else:
             # parallelize search over bucket
             return self.context.parallelize(self.bucket.list(
@@ -81,7 +82,7 @@ class SparkModel(object):
                     (key, self.extract_id(key))).filter(lambda (key, file_id):
                         file_id in sub_ids).map(lambda (key, file_id):
                                 (key, ratings[np.where(file_id == sub_ids)][0])).collect()
-
+                        
     def unique_ratings(self):
         """Returns list of possible ratings."""
         ratings = zip(*self.labeled_paths)[1]
