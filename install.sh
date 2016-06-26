@@ -22,6 +22,7 @@ pip2.7 install pandas
 pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
+pip2.7 install gensim
 
 # EBS volume is mounted at /vol0, not enough room on root drive for NLTK data
 # mkdir /vol0/nltk_data
@@ -47,6 +48,7 @@ pssh -h /root/spark-ec2/slaves -v ln -s /usr/bin/python2.7 /usr/bin/python
 
 pssh -t 10000 -h /root/spark-ec2/slaves pip2.7 install numpy
 pssh -h /root/spark-ec2/slaves pip2.7 install nltk
+pssh -h /root/spark-ec2/slaves pip2.7 install gensim
 pssh -h /root/spark-ec2/slaves pip2.7 install pandas
 pssh -h /root/spark-ec2/slaves pip2.7 install boto
 pssh -h /root/spark-ec2/slaves pip2.7 install xmltodict

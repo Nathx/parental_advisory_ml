@@ -156,7 +156,7 @@ class SparkModel(object):
         test_data = test_rdd.values().cache()
 
         truth = test_data.map(lambda x: x.label).collect()
-        predictions = self.predict(test_data.map(lambda lp: lp.features))
+        predictions = self.predict(test_data.map(lambda lp: lp.features)).collect()
 
         self.score = (np.array(predictions) == np.array(truth)).mean()
 
