@@ -31,13 +31,14 @@ if __name__ == '__main__':
                 .set("spark.shuffle.service.enabled", True)
                 .set("spark.dynamicAllocation.enabled", True)
                 .set("spark.executor.cores", 2)
+                .set('spark.default.parallelism', 30)
                 .setMaster('spark://ec2-54-242-30-75.compute-1.amazonaws.com:7077'))
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
 
     conn = S3Connection(CREDENTIALS['ACCESS_KEY'], CREDENTIALS['SECRET_ACCESS_KEY'])
 
     start_time = datetime.now()
-    sm = SparkModel(sc, conn, PATH_TO_DATA, n_subs=100)
+    sm = SparkModel(sc, conn, PATH_TO_DATA, n_subs=10)
     sm.preprocess()
     subs, clean_subs = sm.n_subs, len(sm.labeled_paths)
     score = 0
