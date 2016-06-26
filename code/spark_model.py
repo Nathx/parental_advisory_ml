@@ -63,10 +63,10 @@ class SparkModel(object):
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
-        if n_subs > 0:
+        if n_subs > -1:
             for key in self.bucket.list(prefix=self.path_to_files):
 
-                file_id = extract_id(key)
+                file_id = self.extract_id(key)
 
                 if (file_id in sub_ids):
                     rating = ratings[np.where(sub_ids == file_id)][0]
@@ -74,14 +74,15 @@ class SparkModel(object):
 
                     if len(labeled_paths) == n_subs:
                         return labeled_paths
+            return labeled_paths
         else:
             # parallelize search over bucket
-            return sm.context.parallelize(sm.bucket.list(
-                prefix=sm.path_to_files)).map(lambda key:
-                    (key, extract_id(key))).filter(lambda (key, file_id):
+            return self.context.parallelize(self.bucket.list(
+                prefix=self.path_to_files)).map(lambda key:
+                    (key, self.extract_id(key))).filter(lambda (key, file_id):
                         file_id in sub_ids).map(lambda (key, file_id):
-                                (key, ratings[np.where(file_id == sub_ids)][0]))
-
+                                (key, ratings[np.where(file_id == sub_ids)][0])).collect()
+                        
     def unique_ratings(self):
         """Returns list of possible ratings."""
         ratings = zip(*self.labeled_paths)[1]
@@ -98,7 +99,7 @@ class SparkModel(object):
         value: list of tokens.
         """
         rdd = self.context.parallelize(
-                self.labeled_paths).map(lambda (key, label):
+                self.labeled_paths, 100).map(lambda (key, label):
                                         (key.name, Document(key, label)))
 
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()

@@ -37,7 +37,7 @@ if __name__ == '__main__':
     model_type = sys.argv[1] if len(sys.argv) > 1 else 'naive_bayes'
 
     start_time = datetime.now()
-    sm = SparkModel(sc, conn, n_subs=1000, model_type=model_type)
+    sm = SparkModel(sc, conn, model_type=model_type)
     sm.preprocess()
     subs, clean_subs = sm.n_subs, len(sm.labeled_paths)
     sm.train()
