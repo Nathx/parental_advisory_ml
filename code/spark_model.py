@@ -23,7 +23,7 @@ class SparkModel(object):
         # find subtitle files
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
-        self.path_to_files = 'data/xml/en/' + subset
+        self.path_to_files = 'data/xml_unzipped/en/' + subset
         self.labeled_paths = self.map_files(self.n_subs)
         if n_subs == 0:
             self.n_subs = n_subs
@@ -64,7 +64,7 @@ class SparkModel(object):
 
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths.append((key, rating))
-        
+
         if n_subs > 0:
             np.random.shuffle(labeled_paths)
             return labeled_paths[:n_subs]
