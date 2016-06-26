@@ -2,6 +2,7 @@ from boto.s3.key import Key
 import socket
 import xmltodict
 from collections import OrderedDict
+from gensim.models.doc2vec import TaggedDocument
 import gzip
 
 class Document(object):
@@ -26,11 +27,13 @@ class Document(object):
 
     def load_file(self):
         if type(self.key) == Key:
-            filename = 'file.xml.gz'
-            self.key.get_contents_to_filename('file.xml.gz')
             if self.key.name.endswith('.gz'):
+                filename = 'file.xml.gz'
+                self.key.get_contents_to_filename('file.xml.gz')
                 return gzip.GzipFile(fileobj=open(filename, 'rb'))
             else:
+                xml_file = StringIO()
+                self.key.get_contents_to_file(xml_file)
                 return open(filename,'r')
         else:
             filename = self.key
@@ -89,14 +92,21 @@ class Document(object):
     def flatten_row(self, elem, field):
         """Flattens nested dictionaries in the XML file."""
         if type(elem) == list:
-            return [e[field] for e in elem]
+            return [e.get(field, '') for e in elem]
         elif type(elem) == OrderedDict:
-            return [elem[field]]
+            return [elem.get(field, '')]
 
     def get_bag_of_words(self):
         """Returns list of all words."""
-        return [word for id, t, sentence in self.contents for word in sentence]
+        all_words = []
+        COMPILER = re.compile('\w+')
+        for id, t, sentence in self.contents:
+            all_words += [w.lower() for w in COMPILER.findall(words) for words in sentence]
+        return all_words
 
+    def get_tagged_doc(self):
+        """Returns tagged document as required by doc2vec."""
+        return TaggedDocument(self.get_bag_of_words(), self.label)
 
     def parse_nb(self):
         """
