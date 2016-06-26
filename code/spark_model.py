@@ -6,7 +6,7 @@ from pyspark.mllib.feature import HashingTF
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.linalg import Vectors
 from pyspark.sql import SQLContext
-from pyspark.mllib.classification import NaiveBayes
+from pyspark.mllib.classification import NaiveBayes, LogisticRegressionWithLBFGS
 from pyspark.ml.feature import IDF
 
 
@@ -131,16 +131,20 @@ class SparkModel(object):
 
     def get_labeled_points(self, features):
         if self.feat == 'tfidf':
-            unique_ratings = list(np.unique(zip(*self.labeled_paths)[1]))
+            ratings = self.unique_ratings()
             label_map = dict((k.name, unique_ratings.index(v)) for k, v in self.labeled_paths)
             return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
-    def eval_score(self):
+    def eval_score(self, model='naive_bayes'):
         paths = set(self.test_paths)
         test_rdd = self.labeled_points.filter(lambda (key, lp):
                                                 key in paths)
         test_data = test_rdd.values().cache()
-        predictions = self.model.predict(test_data.map(lambda x: x.features)).collect()
+        if model == 'naive_bayes':
+            predictions = self.model.predict(test_data.map(lambda x: x.features)).collect()
+        elif model=='log_reg':
+            predictions = np.argmax([model.predict(test_data.map(lambda x: x.features)).collect()
+                                    for model in self.model], axis=1)
         truth = test_data.map(lambda x: x.label).collect()
 
         self.score = (np.array(predictions) == np.array(truth)).mean()
@@ -155,7 +159,7 @@ class SparkModel(object):
         self.train_paths = filenames[n_test:]
         return self
 
-    def train(self, feat='tfidf', model='nb'):
+    def train(self, feat='tfidf', model='naive_bayes'):
         """
         Trains a multinomal NaiveBayes classifier on TFIDF features.
 
@@ -178,7 +182,19 @@ class SparkModel(object):
         train_rdd = self.labeled_points.filter(lambda (key, lp):
                                                 key in paths).values()
 
-        nb = NaiveBayes()
-        self.model = nb.train(train_rdd)
+        if model == 'naive_bayes':
+            nb = NaiveBayes()
+            self.model = nb.train(train_rdd)
+        elif model == 'log_reg':
+            one_vs_all = []
+            for i, rating in enumerate(self.unique_ratings()):
+                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.feature)))
+                logreg = LogisticRegressionWithLBFGS.train(train_rdd, iterations=10)
+                logreg.clearThreshold()
+                one_vs_all.append(logreg)
+            self.model = one_vs_all
 
         return self
+
+
+    def train_doc2vec()
