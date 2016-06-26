@@ -204,7 +204,7 @@ class SparkModel(object):
         elif self.model_type == 'log_reg':
             n_classes = len(self.unique_ratings())
             features = train_rdd.map(lambda lp: LabeledPoint(lp.label, lp.features.toArray()))
-            logreg = LogisticRegressionWithLBFGS.train(features, iterations=10, numClasses=n_classes)
+            logreg = LogisticRegressionWithLBFGS.train(features, iterations=100, numClasses=n_classes)
             self.model = logreg
 
         return self
