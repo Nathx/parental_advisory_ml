@@ -60,16 +60,12 @@ class SparkModel(object):
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
 
-        i = 0
         for key in self.bucket.list(prefix=self.path_to_files):
 
             filename = key.name.encode('utf-8').split('/')[-1]
             file_id = filename.split('.')[0]
 
             if (file_id in sub_ids):
-                i += 1
-                if shuffle:
-                    draw = np.random.random()
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths.append((key, rating))
 
@@ -105,7 +101,7 @@ class SparkModel(object):
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
 
         # update list of paths
-        existing_paths = clean_rdd.keys().collect()
+        existing_paths = rdd.keys().collect()
         self.labeled_paths = [(key, label) for key, label in self.labeled_paths
                                             if key.name in existing_paths]
         return clean_rdd
@@ -140,9 +136,9 @@ class SparkModel(object):
 
         idf = IDF(inputCol='tf', outputCol='idf', minDocFreq=minDocFreq)
         idf_model = idf.fit(df)
-        idf_rdd = idf_model.transform(df)
+        idf_rdd = idf_model.transform(df).select('key', 'idf').rdd.map(tuple).cache()
 
-        return idf_rdd.select('key', 'idf').rdd.map(tuple).cache()
+        return idf_rdd
 
     def get_labeled_points(self, features):
         if self.feat == 'tfidf':
@@ -160,7 +156,7 @@ class SparkModel(object):
         test_data = test_rdd.values().cache()
 
         truth = test_data.map(lambda x: x.label).collect()
-        predictions = self.predict(test_data)
+        predictions = self.predict(test_data.map(lambda lp: lp.features))
 
         self.score = (np.array(predictions) == np.array(truth)).mean()
 
@@ -204,7 +200,7 @@ class SparkModel(object):
         elif self.model_type == 'log_reg':
             n_classes = len(self.unique_ratings())
             features = train_rdd.map(lambda lp: LabeledPoint(lp.label, lp.features.toArray()))
-            logreg = LogisticRegressionWithLBFGS.train(features, iterations=10, numClasses=n_classes)
+            logreg = LogisticRegressionWithLBFGS.train(features, numClasses=n_classes)
             self.model = logreg
 
         return self
