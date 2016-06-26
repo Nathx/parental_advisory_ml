@@ -17,7 +17,7 @@ def log_results(model_type, start_time, end_time, score, n_subs, clean_n_subs):
        f.write('Percentage subs parsed: %.1f%%\n' % (100*float(clean_n_subs) / n_subs))
        f.write('Time to run: %s\n' % duration)
        f.write('Accuracy: %.2f\n' % score)
-    
+
 
 if __name__ == '__main__':
 
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
 
     conn = S3Connection(CREDENTIALS['ACCESS_KEY'], CREDENTIALS['SECRET_ACCESS_KEY'])
-    
+
     model_type = sys.argv[1] if len(sys.argv) > 1 else 'naive_bayes'
 
     start_time = datetime.now()
@@ -42,6 +42,7 @@ if __name__ == '__main__':
     subs, clean_subs = sm.n_subs, len(sm.labeled_paths)
     sm.train()
     score = sm.eval_score()
+    sm.RDD.saveAsPickleFile('rdd.pkl')
     end_time = datetime.now()
     log_results(model_type, start_time, end_time, score, subs, clean_subs)
 
