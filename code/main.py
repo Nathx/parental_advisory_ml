@@ -51,6 +51,4 @@ if __name__ == '__main__':
     end_time = datetime.now()
     log_results(saved, model_type, start_time, end_time, score, subs, clean_subs)
 
-    sm = SparkModel(sc, conn, n_subs=10)
-    print sm.tfidf.first()
     sc.stop()

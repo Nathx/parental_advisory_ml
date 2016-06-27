@@ -65,4 +65,3 @@ Percentage subs parsed: 100.0%
 Time to run: 0:10:37
 Accuracy: 0.50
 Saved.
->>>>>>> 988dc11... Config + Log

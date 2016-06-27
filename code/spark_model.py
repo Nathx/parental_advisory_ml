@@ -84,7 +84,7 @@ class SparkModel(object):
         """
         labels = self.extract_labels()
 
-        labeled_paths = {}
+        labeled_paths = []
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values

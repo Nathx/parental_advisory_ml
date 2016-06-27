@@ -4,6 +4,8 @@ yum install -y tmux
 yum install -y pssh
 yum install -y python27 python27-devel
 yum install -y freetype-devel libpng-devel
+yum remove aws-cli
+yum install aws-cli
 wget https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -O - | python27
 easy_install-2.7 pip
 easy_install py4j
