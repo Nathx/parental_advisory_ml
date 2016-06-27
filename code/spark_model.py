@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
+import os
+
 from document import Document
+
 import pyspark as ps
 from pyspark.mllib.feature import HashingTF
 from pyspark.mllib.regression import LabeledPoint
@@ -9,11 +12,16 @@ from pyspark.sql import SQLContext
 from pyspark.mllib.classification import NaiveBayes, LogisticRegressionWithLBFGS
 from pyspark.ml.feature import IDF
 
+import nltk.data
+from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
+
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, subset='', n_subs=0, feat='tfidf', test_size=.2,
-                    model_type='naive_bayes', debug=False):
+    def __init__(self, sc, conn, n_subs=0, test_size=.2,
+                    model_type='naive_bayes', debug=False,
+                    rdd_path=None, lp_path=None):
         # store parameters
         self.context = sc
         self.conn = conn
@@ -26,19 +34,36 @@ class SparkModel(object):
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
         self.path_to_files = 'data/xml_unzipped/en/' + subset
+
+        self.preprocess(lp_path, rdd_path)
+
+
+
+
+    def preprocess(self, lp_path, rdd_path):
         if debug:
             self.labeled_paths = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
+            self.RDD = self.process_files()
+            self.labeled_points = self.get_labeled_points(self.extract_features())
+            self.make_train_test(self.test_size)
+        elif lp_path:
+            self.labeled_points = self.context.pickleFile(lp_path)
+            self.labeled_paths = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            self.make_train_test(self.test_size)
+        elif rdd_path:
+            self.RDD = self.context.pickleFile(rdd_path)
+            self.labeled_points = self.get_labeled_points(self.extract_features())
+            self.labeled_paths = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            self.make_train_test(self.test_size)
         else:
             self.labeled_paths = self.map_files(self.n_subs)
+            self.RDD = self.process_files()
+            self.labeled_points = self.get_labeled_points(self.extract_features())
+            self.make_train_test(self.test_size)
+
         if n_subs == 0:
             self.n_subs = len(self.labeled_paths)
 
-
-
-    def preprocess(self):
-        self.RDD = self.process_files()
-        self.labeled_points = self.get_labeled_points(self.extract_features())
-        self.make_train_test(self.test_size)
         return self
 
     def extract_labels(self):
@@ -74,6 +99,7 @@ class SparkModel(object):
 
                     if len(labeled_paths) == n_subs:
                         return labeled_paths
+            return labeled_paths
         else:
             # same as above, but parallelized
             return self.context.parallelize(self.bucket.list(
@@ -129,10 +155,18 @@ class SparkModel(object):
         if not hasattr(self, 'RDD'):
             self.RDD = self.process_files()
 
+        # prepare for BOW cleaning
+        nltk.data.path.append(os.environ['NLTK_DATA'])
+        stop = stopwords.words('english')
+        porter = PorterStemmer()
+
         htf = HashingTF(num_features)
         tf = self.RDD.mapValues(lambda x:
                                 x.get_bag_of_words()).mapValues(
-                                    htf.transform).cache()
+                                    lambda x: [porter.stem(word) for word in x if not word in stop]
+                                ).mapValues(
+                                    htf.transform
+                                ).cache()
 
         sqlContext = SQLContext(self.context)
         df = sqlContext.createDataFrame(tf.collect(), ['key', 'tf'])
@@ -140,6 +174,8 @@ class SparkModel(object):
         idf = IDF(inputCol='tf', outputCol='idf', minDocFreq=minDocFreq)
         idf_model = idf.fit(df)
         idf_rdd = idf_model.transform(df).select('key', 'idf').rdd.map(tuple).cache()
+
+        # normalizer = StandardScaler()
 
         return idf_rdd
 
