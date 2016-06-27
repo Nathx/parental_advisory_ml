@@ -57,21 +57,24 @@ class SparkModel(object):
             value: Stemmed Bag Of Words
         If RDD_path is provided, loads the data from there.
 
+
         Returns
         -----
         Self
         """
         if self.debug:
             self.target = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
+
             self.RDD = self.process_files()
             self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
         elif rdd_path:
             self.RDD = self.context.pickleFile(rdd_path)
+
             self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+
         else:
             self.target = self.map_files_to_target(self.n_subs)
             self.RDD = self.process_files()
-
 
         if self.n_subs == 0:
             self.n_subs = len(self.target)
@@ -100,9 +103,11 @@ class SparkModel(object):
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
 
+
         if n_subs > 0:
             # look for filenames matching our labeled data
             # stop early if n_subs is defined
+
             for key in self.bucket.list(prefix=self.path_to_files):
 
                 filename = key.name.encode('utf-8').split('/')[-1]
@@ -215,6 +220,7 @@ class SparkModel(object):
         """
         ratings = self.unique_ratings()
         label_map = dict((k.name, ratings.index(v)) for k, v in self.target)
+
         return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
     def predict(self, rdd):
