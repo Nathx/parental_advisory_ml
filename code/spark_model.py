@@ -12,19 +12,24 @@ from pyspark.ml.feature import IDF
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, subset='', n_subs=0, feat='tfidf', test_size=.2):
+    def __init__(self, sc, conn, subset='', n_subs=0, feat='tfidf', test_size=.2,
+                    model_type='naive_bayes', debug=False):
         # store parameters
         self.context = sc
         self.conn = conn
         self.feat = feat
         self.n_subs = n_subs
         self.test_size = test_size
+        self.model_type = model_type
 
         # find subtitle files
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
         self.path_to_files = 'data/xml_unzipped/en/' + subset
-        self.labeled_paths = self.map_files(self.n_subs)
+        if debug:
+            self.labeled_paths = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
+        else:
+            self.labeled_paths = self.map_files(self.n_subs)
         if n_subs == 0:
             self.n_subs = n_subs
 
@@ -44,7 +49,7 @@ class SparkModel(object):
         labeled_df['IDSubtitle'] = labeled_df['IDSubtitle'].astype(int)
         return labeled_df
 
-    def map_files(self, n_subs=-1):
+    def map_files(self, n_subs=0, shuffle=False):
         """
         Loops over the directory and grabs the filepath for each valid sub_id.
         """
@@ -65,14 +70,19 @@ class SparkModel(object):
                 rating = ratings[np.where(sub_ids == file_id)][0]
                 labeled_paths[key] = rating
 
-            if len(labeled_paths) == n_subs:
-                break
+                if not shuffle and len(labeled_paths) == n_subs:
+                    return labeled_paths
+
+        if n_subs > 0:
+            np.random.shuffle(labeled_paths)
+            return labeled_paths[:n_subs]
 
         return labeled_paths.items()
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
-        return np.unique(self.ratings)
+        ratings = zip(*self.labeled_paths)[1]
+        return list(np.unique(ratings))
 
     def process_files(self):
         """
@@ -133,20 +143,20 @@ class SparkModel(object):
     def get_labeled_points(self, features):
         if self.feat == 'tfidf':
             ratings = self.unique_ratings()
-            label_map = dict((k.name, unique_ratings.index(v)) for k, v in self.labeled_paths)
+            label_map = dict((k.name, ratings.index(v)) for k, v in self.labeled_paths)
             return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
-    def eval_score(self, model='naive_bayes'):
+    def predict(self, rdd):
+        return self.model.predict(rdd)
+
+    def eval_score(self):
         paths = set(self.test_paths)
         test_rdd = self.labeled_points.filter(lambda (key, lp):
                                                 key in paths)
         test_data = test_rdd.values().cache()
-        if model == 'naive_bayes':
-            predictions = self.model.predict(test_data.map(lambda x: x.features)).collect()
-        elif model=='log_reg':
-            predictions = np.argmax([model.predict(test_data.map(lambda x: x.features)).collect()
-                                    for model in self.model], axis=1)
+
         truth = test_data.map(lambda x: x.label).collect()
+        predictions = self.predict(test_data)
 
         self.score = (np.array(predictions) == np.array(truth)).mean()
 
@@ -160,7 +170,7 @@ class SparkModel(object):
         self.train_paths = filenames[n_test:]
         return self
 
-    def train(self, feat='tfidf', model='naive_bayes'):
+    def train(self, feat='tfidf'):
         """
         Trains a multinomal NaiveBayes classifier on TFIDF features.
 
@@ -183,19 +193,18 @@ class SparkModel(object):
         train_rdd = self.labeled_points.filter(lambda (key, lp):
                                                 key in paths).values()
 
-        if model == 'naive_bayes':
+        if self.model_type == 'naive_bayes':
             nb = NaiveBayes()
             self.model = nb.train(train_rdd)
-        elif model == 'log_reg':
-            one_vs_all = []
-            for i, rating in enumerate(self.unique_ratings()):
-                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.features)))
-                logreg = LogisticRegressionWithLBFGS.train(train_rdd, iterations=10)
-                logreg.clearThreshold()
-                one_vs_all.append(logreg)
-            self.model = one_vs_all
+
+        elif self.model_type == 'log_reg':
+            n_classes = len(self.unique_ratings())
+            features = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label, lp.features.toArray())))
+            logreg = LogisticRegressionWithLBFGS.train(train_rdd.values(), iterations=10, numClasses=n_classes)
+            self.model = logreg
 
         return self
 
 
     def train_doc2vec():
+        pass
