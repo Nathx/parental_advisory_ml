@@ -23,9 +23,9 @@ pip2.7 install py4j
 pip2.7 install gensim
 
 # EBS volume is mounted at /vol0, not enough room on root drive for NLTK data
-# mkdir /vol0/nltk_data
-# python27 -m nltk.downloader -d /vol0/nltk_data/ all
-# echo 'export NLTK_DATA="/vol0/nltk_data"' >> ~/.bash_profile
+mkdir /mnt/nltk_data
+python27 -m nltk.downloader -d /mnt/nltk_data/ all
+echo 'export NLTK_DATA="/mnt/nltk_data"' >> ~/.bash_profile
 echo 'export SPARK_HOME=/root/spark' >> ~/.bash_profile
 echo 'export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/build:$PYTHONPATH' >> ~/.bash_profile
 

@@ -8,7 +8,7 @@ import json
 import sys
 from datetime import datetime
 
-def log_results(model_type, start_time, end_time, score, n_subs, clean_n_subs):
+def log_results(saved, model_type, start_time, end_time, score, n_subs, clean_n_subs):
     with open('../logs/log.txt', 'a') as f:
        f.write('-'*40+'\n')
        duration = str(end_time - start_time).split('.')[0]
@@ -17,6 +17,7 @@ def log_results(model_type, start_time, end_time, score, n_subs, clean_n_subs):
        f.write('Percentage subs parsed: %.1f%%\n' % (100*float(clean_n_subs) / n_subs))
        f.write('Time to run: %s\n' % duration)
        f.write('Accuracy: %.2f\n' % score)
+       f.write('Saved.'*saved)
 
 
 if __name__ == '__main__':
@@ -38,13 +39,17 @@ if __name__ == '__main__':
 
     start_time = datetime.now()
     sm = SparkModel(sc, conn, model_type=model_type)
-    sm.preprocess()
+    sm.preprocess('rdd3.pkl')
     subs, clean_subs = sm.n_subs, len(sm.labeled_paths)
     sm.train()
     score = sm.eval_score()
-    sm.RDD.saveAsPickleFile('rdd.pkl')
+    saved = True
+    try:
+        sm.labeled_points.saveAsPickleFile('labeled_points.pkl')
+    except:
+        saved = False
     end_time = datetime.now()
-    log_results(model_type, start_time, end_time, score, subs, clean_subs)
+    log_results(saved, model_type, start_time, end_time, score, subs, clean_subs)
 
     sm = SparkModel(sc, conn, n_subs=10)
     print sm.tfidf.first()
