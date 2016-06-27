@@ -20,17 +20,14 @@ class Document(object):
         self.key = key
         self.corrupted = False
 
-        self.parsed_xml = self.parse_xml()
-        self.contents = self.extract_sub()
+        self.extract_content()
 
-        self.contractions = re.compile(r"|-|\"")
-        # all non alphanumeric
-        self.symbols = re.compile(r'(\W+)', re.U)
-        # single character removal
-        self.singles = re.compile(r'(\s\S\s)', re.I|re.U)
-        # separators (any whitespace)
-        self.seps = re.compile(r'\s+')
-        self.compiler = re.compile('\w+')
+        self.compiler = re.compile('[\w-]+')
+
+    def extract_content(self):
+        parsed_xml = self.parse_xml()
+        self.contents = self.extract_sub(parsed_xml)
+        self.meta = self.extract_meta(parsed_xml)
 
     def get_sub(self):
         """Returns subtitle from file if it exists."""
@@ -65,7 +62,7 @@ class Document(object):
             words = self.flatten_row(row['w'], '#text')
         return row_id, times, words
 
-    def extract_sub(self):
+    def extract_sub(self, parsed_xml):
         """
         Returns subtitle as a list of triplets (id, timestamps, words).
         """
@@ -73,9 +70,9 @@ class Document(object):
         if self.corrupted:
             return sentences
         else:
-            doc = self.parsed_xml['document']
+            doc = parsed_xml['document']
 
-        if 's' in doc.keys():
+        if 's' in doc:
             sub_content = doc['s']
             if type(sub_content) == list:
                 sentences = [self.extract_row(row) for row in sub_content]
@@ -88,6 +85,36 @@ class Document(object):
 
         return sentences
 
+    def extract_meta(self, parsed_xml):
+        """
+        Extract meta-data contained in subtitle file.
+        """
+        meta = {}
+        if self.corrupted:
+            return meta
+        else:
+            doc = parsed_xml['document']
+
+        if 'meta' in doc:
+
+            # grab movie's metadata
+            if 'source' in doc['meta'] and \
+                        type(doc['meta']['source']) == OrderedDict:
+
+                meta.update(dict(doc['meta']['source']))
+
+            # grab subtitle's metadata
+            if 'conversion' in doc['meta'] and \
+                        type(doc['meta']['conversion']) == OrderedDict:
+                # extract keys of interest
+                conversion = dict((k, v)
+                        for k, v in doc['meta']['conversion'].iteritems()
+                        if k in ['sentences', 'tokens', 'unknown_words', 'truecased_words'])
+
+                meta.update(conversion)
+
+        return meta
+
     def flatten_row(self, elem, field):
         """Flattens nested dictionaries in the XML file."""
         if type(elem) == list:
@@ -99,17 +126,15 @@ class Document(object):
 
     def clean(self, text):
         text = text.lower()
-        text = self.contractions.sub('', text)
-        text = self.symbols.sub(r' \1 ', text)
-        text = self.singles.sub(' ', text)
-        text = self.seps.sub(' ', text)
-        return text
+        words = self.compiler.findall(text)
+        return [w for w in words if len(w) > 1]
 
     def get_bag_of_words(self):
         """Returns list of all words."""
         all_words = []
         for id, t, sentence in self.contents:
-            all_words += [self.clean(w) for words in sentence for w in self.compiler.findall(words)]
+            all_words += [w for words in sentence
+                                for w in self.clean(words)]
         return all_words
 
     def get_tagged_doc(self):
