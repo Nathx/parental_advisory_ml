@@ -33,38 +33,50 @@ class SparkModel(object):
         # find subtitle files
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
-        self.path_to_files = 'data/xml_unzipped/en/' + subset
+        self.path_to_files = 'data/xml_unzipped/en/'
 
-        self.preprocess(lp_path, rdd_path)
+        # Preprocess the data unless learning features are already provided
+        if lp_path:
+            self.labeled_points = self.context.load(lp_path)
+            self.target = self.labeled_points.map(lambda (key, lp):
+                                                (key, lp.label)).collect()
+        else:
+            self.preprocess(rdd_path)
 
 
 
-
-    def preprocess(self, lp_path, rdd_path):
+    def preprocess(self, rdd_path):
+        """
+        Preprocessing pipeline.
+        - Fetch target and matching filenames in S3
+        - Pull files from S3 and preprocess
+        If RDD_path is provided, loads the data from there.
+        """
         if debug:
-            self.labeled_paths = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
+            self.target = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
             self.RDD = self.process_files()
-            self.labeled_points = self.get_labeled_points(self.extract_features())
-            self.make_train_test(self.test_size)
-        elif lp_path:
-            self.labeled_points = self.context.pickleFile(lp_path)
-            self.labeled_paths = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
-            self.make_train_test(self.test_size)
+            # self.labeled_points = self.get_labeled_points(self.extract_features())
+            # self.make_train_test(self.test_size)
+            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            # self.make_train_test(self.test_size)
         elif rdd_path:
             self.RDD = self.context.pickleFile(rdd_path)
-            self.labeled_points = self.get_labeled_points(self.extract_features())
-            self.labeled_paths = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
-            self.make_train_test(self.test_size)
+            # self.labeled_points = self.get_labeled_points(self.extract_features())
+            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            # self.make_train_test(self.test_size)
         else:
-            self.labeled_paths = self.map_files(self.n_subs)
+            self.target = self.map_files_to_target(self.n_subs)
             self.RDD = self.process_files()
-            self.labeled_points = self.get_labeled_points(self.extract_features())
-            self.make_train_test(self.test_size)
+            # self.labeled_points = self.get_labeled_points(self.extract_features())
+            # self.make_train_test(self.test_size)
 
-        if n_subs == 0:
-            self.n_subs = len(self.labeled_paths)
+        if self.n_subs == 0:
+            self.n_subs = len(self.target)
 
         return self
+
+    def
+
 
     def extract_labels(self):
         """
@@ -75,16 +87,20 @@ class SparkModel(object):
         return labeled_df
 
     def extract_id(self, key):
+        """
+        Extract ID from filename.
+        """
         filename = key.name.encode('utf-8').split('/')[-1]
         return filename.split('.')[0]
 
-    def map_files(self, n_subs=0, shuffle=False):
+    def map_files_to_target(self, n_subs=0, shuffle=False):
         """
-        Loops over the directory and grabs the filepath for each valid sub_id.
+        Loops over the directory and grabs the filepath for each valid sub_id,
+        then finds the corresponding
         """
         labels = self.extract_labels()
 
-        labeled_paths = []
+        target = []
 
         sub_ids = labels.IDSubtitle.astype(str).values
         ratings = labels.RATING.values
@@ -95,11 +111,11 @@ class SparkModel(object):
 
                 if (file_id in sub_ids):
                     rating = ratings[np.where(sub_ids == file_id)][0]
-                    labeled_paths.append((key, rating))
+                    target.append((key, rating))
 
-                    if len(labeled_paths) == n_subs:
-                        return labeled_paths
-            return labeled_paths
+                    if len(target) == n_subs:
+                        return target
+            return target
         else:
             # same as above, but parallelized
             return self.context.parallelize(self.bucket.list(
@@ -110,32 +126,45 @@ class SparkModel(object):
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
-        ratings = zip(*self.labeled_paths)[1]
+        ratings = zip(*self.target)[1]
         return list(np.unique(ratings))
 
     def process_files(self):
         """
         Transforms each subtitle file into its tokens.
+        Stemmatization and stopwords removal are done here.
 
         Returns
         -----
         RDD of (key, value) pairs where:
-        key: (label, filepath)
-        value: list of tokens.
+        key: filepath
+        value: Stemmed Bag Of Words.
         """
         rdd = self.context.parallelize(
-                self.labeled_paths, 100).map(lambda (key, label):
+                self.target, 100).map(lambda (key, label):
                                         (key.name, Document(key, label)))
 
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
 
-        # update list of paths
+        # remove corrupted files from list of paths
         existing_paths = rdd.keys().collect()
-        self.labeled_paths = [(key, label) for key, label in self.labeled_paths
+        self.target = [(key, label) for key, label in self.target
                                             if key.name in existing_paths]
+
+        # prepare for BOW cleaning
+        nltk.data.path.append(os.environ['NLTK_DATA'])
+        stop = stopwords.words('english')
+        porter = PorterStemmer()
+
+        # transform doc into stemmed bag of words
+        clean_rdd = clean_rdd.mapValues(lambda x:
+                                x.get_bag_of_words()).mapValues(
+                                    lambda x: [porter.stem(word)
+                                                for word in x
+                                                if not word in stop])
         return clean_rdd
 
-    def extract_features(self, feat='tfidf', num_features=10000, minDocFreq=1):
+    def extract_features(self, feat='tfidf', **kwargs):
         """
         Converts each subtitle into its TFIDF representation.
 
@@ -152,37 +181,30 @@ class SparkModel(object):
         tf: Term-frequency Sparse Vector.
         IDF: TFIDF Sparse Vector.
         """
-        if not hasattr(self, 'RDD'):
-            self.RDD = self.process_files()
 
-        # prepare for BOW cleaning
-        nltk.data.path.append(os.environ['NLTK_DATA'])
-        stop = stopwords.words('english')
-        porter = PorterStemmer()
-
+        # transform BOW into TF vectors
+        num_features = kwargs.get('num_features', 10000)
         htf = HashingTF(num_features)
-        tf = self.RDD.mapValues(lambda x:
-                                x.get_bag_of_words()).mapValues(
-                                    lambda x: [porter.stem(word) for word in x if not word in stop]
-                                ).mapValues(
-                                    htf.transform
-                                ).cache()
+        tf = self.RDD.mapValues(htf.transform).cache()
 
+        # transform TF vectors into IDF vectors
         sqlContext = SQLContext(self.context)
         df = sqlContext.createDataFrame(tf.collect(), ['key', 'tf'])
 
+        minDocFreq = kwargs.get('minDocFreq', 2)
         idf = IDF(inputCol='tf', outputCol='idf', minDocFreq=minDocFreq)
         idf_model = idf.fit(df)
         idf_rdd = idf_model.transform(df).select('key', 'idf').rdd.map(tuple).cache()
 
-        # normalizer = StandardScaler()
+        if self.model_type =
+        normalizer = StandardScaler()
 
         return idf_rdd
 
     def get_labeled_points(self, features):
         if self.feat == 'tfidf':
             ratings = self.unique_ratings()
-            label_map = dict((k.name, ratings.index(v)) for k, v in self.labeled_paths)
+            label_map = dict((k.name, ratings.index(v)) for k, v in self.target)
             return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
     def predict(self, rdd):
@@ -203,7 +225,7 @@ class SparkModel(object):
 
     def make_train_test(self, test_size):
         n_test = int(test_size*self.n_subs)
-        filenames = [key.name for key, label in self.labeled_paths]
+        filenames = [key.name for key, label in self.target]
         np.random.shuffle(filenames)
         self.test_paths = filenames[:n_test]
         self.train_paths = filenames[n_test:]
