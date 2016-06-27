@@ -124,7 +124,7 @@ class SparkModel(object):
         value: list of tokens.
         """
         rdd = self.context.parallelize(
-                self.labeled_paths).map(lambda (key, label):
+                self.labeled_paths, 100).map(lambda (key, label):
                                         (key.name, Document(key, label)))
 
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
