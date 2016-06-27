@@ -46,11 +46,7 @@ class Document(object):
         Loads XML file and converts to OrderedDict
         """
         data = self.load_file()
-        try:
-            xml_dict = xmltodict.parse(data)
-        except:
-            self.corrupted = True
-            return []
+        xml_dict = xmltodict.parse(data)
 
         return xml_dict
 
