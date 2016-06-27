@@ -1,0 +1,30 @@
+----------------------------------------
+Model: NaiveBayes
+Number of subs: 100
+Percentage subs parsed: 0.1%
+Time to run: 0:11:35
+Accuracy: 0.00
+----------------------------------------
+Model: NaiveBayes
+Number of subs: 1000
+Percentage subs parsed: 100.0%
+Time to run: 0:02:17
+Accuracy: 0.00
+----------------------------------------
+Model: log_reg
+Number of subs: 1000
+Percentage subs parsed: 100.0%
+Time to run: 0:02:25
+Accuracy: 0.41
+----------------------------------------
+Model: naive_bayes
+Number of subs: 1000
+Percentage subs parsed: 100.0%
+Time to run: 0:02:17
+Accuracy: 0.42
+----------------------------------------
+Model: naive_bayes
+Number of subs: 1000
+Percentage subs parsed: 100.0%
+Time to run: 0:02:33
+Accuracy: 0.40
