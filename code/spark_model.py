@@ -75,6 +75,7 @@ class SparkModel(object):
 
                     if len(labeled_paths) == n_subs:
                         return labeled_paths
+            return labeled_paths
         else:
             # same as above, but parallelized
             return self.context.parallelize(self.bucket.list(
@@ -99,7 +100,7 @@ class SparkModel(object):
         value: list of tokens.
         """
         rdd = self.context.parallelize(
-                self.labeled_paths).map(lambda (key, label):
+                self.labeled_paths, 100).map(lambda (key, label):
                                         (key.name, Document(key, label)))
 
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
