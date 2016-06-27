@@ -91,8 +91,9 @@ class SparkModel(object):
         clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
 
         # update list of paths
+        existing_paths = clean_rdd.keys().collect()
         self.labeled_paths = [(key, label) for key, label in self.labeled_paths
-                                            if key.name in clean_rdd.keys().collect()]
+                                            if key.name in existing_paths]
         return clean_rdd
 
     def extract_features(self, feat='tfidf', num_features=10000, minDocFreq=1):
@@ -188,7 +189,7 @@ class SparkModel(object):
         elif model == 'log_reg':
             one_vs_all = []
             for i, rating in enumerate(self.unique_ratings()):
-                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.feature)))
+                ova_train_rdd = train_rdd.map(lambda (key, lp): (key, LabeledPoint(lp.label == i, lp.features)))
                 logreg = LogisticRegressionWithLBFGS.train(train_rdd, iterations=10)
                 logreg.clearThreshold()
                 one_vs_all.append(logreg)
@@ -197,4 +198,4 @@ class SparkModel(object):
         return self
 
 
-    def train_doc2vec()
+    def train_doc2vec():
