@@ -4,7 +4,11 @@ import xmltodict
 from collections import OrderedDict
 from gensim.models.doc2vec import TaggedDocument
 import re
+import logging
 import gzip
+
+logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
 
 class Document(object):
     """
@@ -73,8 +77,12 @@ class Document(object):
 
         if 's' in doc.keys():
             sub_content = doc['s']
-            for row in sub_content:
-                sentences.append(self.extract_row(row))
+            if type(sub_content) == list:
+                sentences = [self.extract_row(row) for row in sub_content]
+            elif type(sub_content) == OrderedDict:
+                sentences = [self.extract_row(sub_content)]
+            else:
+                raise TypeError('%s: Format not recognized.' % key.name)
         else:
             self.corrupted = True
 
@@ -86,6 +94,8 @@ class Document(object):
             return [e.get(field, '') for e in elem]
         elif type(elem) == OrderedDict:
             return [elem.get(field, '')]
+        else:
+            return []
 
     def clean(self, text):
         text = text.lower()
