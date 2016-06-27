@@ -11,22 +11,19 @@ class ImdbSpider(Spider):
     allowed_domains = ["imdb.com"]
 
     def start_requests(self):
-        with open('/Users/nathankiner/galvanize/NLP_subs_project/data/crawl_ids.pkl', 'r') as f:
+        # load full list of IMDB ids from OpenSubtitles
+        with open('/Users/nathankiner/galvanize/NLP_subs_project/data/crawl_ids_full.pkl', 'r') as f:
             crawl_ids = pkl.load(f)
+        # remove already crawled ids
         existing_ids = h.fetch_ids()
         crawl_ids = [id for id in crawl_ids if id not in existing_ids]
         url = 'http://www.imdb.com/title/tt%s/parentalguide'
 
+        # send request
         for c_id in crawl_ids:
             request = Request(url % c_id, self.parse)
             request.meta['imdb_id'] = c_id
             yield request
-
-    def generate_urls(self):
-        with open('/Users/nathankiner/galvanize/NLP_subs_project/data/crawl_ids.pkl') as f:
-            crawl_ids = pkl.load(f)
-        url = 'http://www.imdb.com/title/tt%s/parentalguide'
-        return [url % c_id for c_id in crawl_ids]
 
     def parse(self, response):
 
@@ -34,6 +31,8 @@ class ImdbSpider(Spider):
         soup = BeautifulSoup(response.body, 'html.parser')
         item['title'] = soup.select('a.main')[0].text
         item['imdb_id'] = response.meta['imdb_id']
+
+        # extract all country-specific ratings
         for elem in soup.select('.info'):
             key = h.craft_key(elem.h5.get_text())
             value = elem.div.get_text().lower()
@@ -49,6 +48,8 @@ class ImdbSpider(Spider):
             else:
                 item[key] = value
 
+        # extract all comments section from parental guide
+        # (violence, frightening scenes, nudity, etc.)
         ids = re.compile('swiki\.2\.\d$')
         for elem in soup.findAll(id=ids):
             key = h.craft_key(elem.h3.get_text())
