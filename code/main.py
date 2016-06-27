@@ -39,13 +39,12 @@ if __name__ == '__main__':
 
     start_time = datetime.now()
     sm = SparkModel(sc, conn, model_type=model_type)
-    sm.preprocess('rdd3.pkl')
     subs, clean_subs = sm.n_subs, len(sm.labeled_paths)
     sm.train()
     score = sm.eval_score()
     saved = True
     try:
-        sm.labeled_points.saveAsPickleFile('labeled_points.pkl')
+        sm.RDD.saveAsPickleFile('stemmed_RDD.pkl')
     except:
         saved = False
     end_time = datetime.now()

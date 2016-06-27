@@ -25,15 +25,15 @@ class SparkModel(object):
         # store parameters
         self.context = sc
         self.conn = conn
-        self.feat = feat
         self.n_subs = n_subs
         self.test_size = test_size
         self.model_type = model_type
+        self.debug = debug
 
         # find subtitle files
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
-        self.path_to_files = 'data/xml_unzipped/en/' + subset
+        self.path_to_files = 'data/xml_unzipped/en/'
 
         self.preprocess(lp_path, rdd_path)
 
@@ -41,7 +41,7 @@ class SparkModel(object):
 
 
     def preprocess(self, lp_path, rdd_path):
-        if debug:
+        if self.debug:
             self.labeled_paths = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
             self.RDD = self.process_files()
             self.labeled_points = self.get_labeled_points(self.extract_features())
@@ -52,8 +52,8 @@ class SparkModel(object):
             self.make_train_test(self.test_size)
         elif rdd_path:
             self.RDD = self.context.pickleFile(rdd_path)
+            self.labeled_paths = self.RDD.map(lambda (key, doc): (doc.key, doc.label)).collect()
             self.labeled_points = self.get_labeled_points(self.extract_features())
-            self.labeled_paths = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
             self.make_train_test(self.test_size)
         else:
             self.labeled_paths = self.map_files(self.n_subs)
@@ -61,7 +61,7 @@ class SparkModel(object):
             self.labeled_points = self.get_labeled_points(self.extract_features())
             self.make_train_test(self.test_size)
 
-        if n_subs == 0:
+        if self.n_subs == 0:
             self.n_subs = len(self.labeled_paths)
 
         return self
@@ -181,10 +181,9 @@ class SparkModel(object):
         return idf_rdd
 
     def get_labeled_points(self, features):
-        if self.feat == 'tfidf':
-            ratings = self.unique_ratings()
-            label_map = dict((k.name, ratings.index(v)) for k, v in self.labeled_paths)
-            return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
+        ratings = self.unique_ratings()
+        label_map = dict((k.name, ratings.index(v)) for k, v in self.labeled_paths)
+        return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
 
     def predict(self, rdd):
         return self.model.predict(rdd)
