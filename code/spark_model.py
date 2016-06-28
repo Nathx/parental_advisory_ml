@@ -5,16 +5,20 @@ import os
 from document import Document
 
 import pyspark as ps
-from pyspark.mllib.feature import HashingTF
+from pyspark.mllib.feature import HashingTF, IDF, StandardScaler
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.linalg import Vectors
 from pyspark.sql import SQLContext
 from pyspark.mllib.classification import NaiveBayes, LogisticRegressionWithLBFGS
-from pyspark.ml.feature import IDF
 
 import nltk.data
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
+
+import logging
+
+pyspark_log = logging.getLogger('pyspark')
+pyspark_log.setLevel(logging.INFO)
 
 
 class SparkModel(object):
@@ -42,7 +46,7 @@ class SparkModel(object):
         if lp_path:
             self.labeled_points = self.context.pickleFile(lp_path)
             self.target = self.labeled_points.map(lambda (key, lp):
-                                                (key, lp.label)).collect()
+                                                (key, lp.label)).cache()
         else:
             self.preprocess(rdd_path)
 
@@ -63,21 +67,25 @@ class SparkModel(object):
         Self
         """
         if self.debug:
-            self.target = [(self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')]
+            self.target = self.context.parallelize([
+                (self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')
+                ])
 
             self.RDD = self.process_files()
-            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label))
         elif rdd_path:
             self.RDD = self.context.pickleFile(rdd_path)
 
-            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label)).collect()
+            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label))
 
         else:
             self.target = self.map_files_to_target(self.n_subs)
             self.RDD = self.process_files()
 
+        self.target.cache()
+
         if self.n_subs == 0:
-            self.n_subs = len(self.target)
+            self.n_subs = self.target.count()
 
         return self
 
@@ -118,8 +126,8 @@ class SparkModel(object):
                     target.append((key, rating))
 
                     if len(target) == n_subs:
-                        return target
-            return target
+                        return self.context.parallelize(target)
+            return self.context.parallelize(target)
         else:
             # same as above, but parallelized
             file_ids = self.context.parallelize(self.bucket.list(
@@ -127,18 +135,20 @@ class SparkModel(object):
                     (key, key.name.encode('utf-8').split('/')[-1])
                 ).map(lambda (key, filename): (key, filename.split('.')[0]))
 
+            sub_ids = self.context.broadcast(sub_ids)
+            ratings = self.context.broadcast(ratings)
+
             # Filter out file_ids missing from labeled data and map to rating
             target = file_ids.filter(lambda (key, file_id):
-                            file_id in sub_ids
+                            file_id in sub_ids.value
                         ).map(lambda (key, file_id):
-                                (key, ratings[np.where(file_id == sub_ids)][0])
-                        ).collect()
+                                (key, ratings.value[np.where(file_id == sub_ids)][0])
+                        )
             return target
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
-        ratings = zip(*self.target)[1]
-        return list(np.unique(ratings))
+        return self.target.values().distinct().collect()
 
     def process_files(self):
         """
@@ -151,16 +161,16 @@ class SparkModel(object):
         key: filepath
         value: Stemmed Bag Of Words.
         """
-        rdd = self.context.parallelize(
-                self.target, self.n_part).map(lambda (key, label):
-                                        (key.name, Document(key, label)))
+        rdd = self.target \
+                .map(lambda (key, label): (key.name, Document(key, label)))
 
-        clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted).cache()
+
+        clean_rdd = rdd.filter(lambda (key, doc): not doc.corrupted) \
+                        .repartition(self.n_part) \
+                        .cache()
 
         # remove corrupted files from list of paths
-        existing_paths = rdd.keys().collect()
-        self.target = [(key, label) for key, label in self.target
-                                            if key.name in existing_paths]
+        self.target = clean_rdd.map(lambda (key, doc): (key, doc.label)).cache()
 
         # prepare for BOW cleaning
         nltk.data.path.append(os.environ['NLTK_DATA'])
@@ -197,7 +207,7 @@ class SparkModel(object):
         feat_rdd = self.RDD.mapValues(htf.transform).cache()
 
         # transform TF vectors into IDF vectors
-        if feat = 'tfidf':
+        if feat == 'tfidf':
             keys, tf_vecs = feat_rdd.keys(), feat_rdd.values()
             minDocFreq = kwargs.get('minDocFreq', 2)
             idf = IDF(minDocFreq=minDocFreq)
@@ -205,7 +215,7 @@ class SparkModel(object):
             idf_rdd = idf_model.transform(tf_vecs.map(lambda vec: vec.toArray()))
             feat_rdd = keys.zip(idf_rdd)
 
-        if self.model_type = 'log_reg':
+        if self.model_type == 'log_reg':
             normalizer = StandardScaler(withMean=True, withStd=True)
             keys, vecs = feat_rdd.keys(), feat_rdd.values()
             norm_model = normalizer.fit(vecs)
@@ -218,10 +228,11 @@ class SparkModel(object):
         """
         Embed features and target into LabeledPoint object.
         """
-        ratings = self.unique_ratings()
-        label_map = dict((k.name, ratings.index(v)) for k, v in self.target)
+        ratings = self.context.broadcast(self.unique_ratings())
 
-        return features.map(lambda (k, v): (k, LabeledPoint(label_map.get(k), v))).cache()
+        return features.join(self.target) \
+                .map(lambda (k, (vec, label)): (k, LabeledPoint(ratings.value.index(label), vec))) \
+                .cache()
 
     def predict(self, rdd):
         """
@@ -233,21 +244,22 @@ class SparkModel(object):
         """
         Compute score on test dataset.
         """
-        paths = self.context.broadcast(set(sm.test_paths))
-        test_rdd = self.labeled_points.filter(lambda (key, lp):
-                                                key in paths.value)
-        test_data = test_rdd.values().cache()
+        test_rdd = self.labeled_points.join(self.y_test) \
+                        .repartition(self.n_part).cache()
 
-        truth = test_data.map(lambda x: x.label)
-        predictions = self.predict(test_data.map(lambda lp: lp.features))
+        test_data = test_rdd.map(lambda (key, (lp, label)): lp.features)
+        predictions = self.predict(test_data)
+
+        truth = test_rdd.map(lambda (key, (lp, label)): label)
+
 
         self.score = truth.zip(predictions).map(lambda (y, y_pred): (y == y_pred)).mean()
 
         return self.score
 
     def make_train_test(self, test_size):
-        train_rdd, test_rdd = self.labeled_points.randomSplit([1 - test_size, test_size])
-        self.train_paths, self.test_paths = train_rdd.keys(), test_rdd.keys()
+        self.y_train, self.y_test = self.target.randomSplit([1 - test_size,
+                                                                    test_size])
         return self
 
     def train(self, feat='tfidf'):
@@ -270,10 +282,9 @@ class SparkModel(object):
             self.labeled_points = self.make_labeled_points(self.extract_features())
         self.make_train_test(self.test_size)
 
-        paths = self.context.broadcast(set(self.train_paths))
-        train_rdd = self.labeled_points.filter(lambda (key, lp):
-                                                key in paths.value
-                                            ).values().repartition(self.n_part).cache()
+        train_rdd = self.labeled_points.join(self.y_train) \
+                        .map(lambda (key, (lp, label)): lp) \
+                        .repartition(self.n_part).cache()
 
         if self.model_type == 'naive_bayes':
             nb = NaiveBayes()
@@ -284,6 +295,8 @@ class SparkModel(object):
             features = train_rdd.map(lambda lp: LabeledPoint(lp.label, lp.features.toArray()))
             logreg = LogisticRegressionWithLBFGS.train(features, numClasses=n_classes)
             self.model = logreg
+
+        # elif self
 
         return self
 
