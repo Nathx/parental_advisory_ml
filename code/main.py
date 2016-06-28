@@ -47,7 +47,11 @@ def build_model(sc, conn, **kwargs):
 
 
 def main(local, debug, save_rdd, **kwargs):
-    logging.basicConfig(format='%(asctime)s %(message)s', filename='../logs/log.txt',level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s %(message)s')
+    main_log = logging.getLogger('main')
+    main_log.setLevel(logging.DEBUG)
+    handler = logging.FileHandler('../logs/log.txt')
+    main_log.addHandler(handler)
     logging.debug('-'*40)
     logging.debug('-'*40)
     logging.debug('Execution time: %s' % str(datetime.now()))
@@ -93,8 +97,6 @@ def group():
 @click.option('--save_rdd', is_flag=True)
 @click.option('--local', is_flag=True)
 def run(local, debug, save_rdd, **kwargs):
-    logging.basicConfig(format='%(asctime)s %(message)s', filename='../logs/log.txt',level=logging.DEBUG)
-    logging.debug('Got into run.')
     main(local, debug, save_rdd, **kwargs)
 
 if __name__ == '__main__':
