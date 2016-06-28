@@ -1,5 +1,4 @@
 from spark_model import SparkModel
-from document import Document
 from datetime import datetime
 import socket
 
@@ -12,49 +11,91 @@ import sys
 import click
 import logging
 
-def set_spark_context():
+
+def set_spark_context(local):
+
+    logging.debug('Configuring')
     APP_NAME = 'spark_model'
     conf = (SparkConf()
                 .setAppName(APP_NAME)
-                .set("spark.executor.cores", 4)
-                .setMaster('spark://ec2-54-173-173-223.compute-1.amazonaws.com:7077'))
+                .set("spark.executor.cores", 4))
+
+    if local:
+        conf.setMaster('local[4]')
+    else:
+        conf.setMaster('spark://ec2-54-173-173-223.compute-1.amazonaws.com:7077')
+    logging.debug(conf.getAll())
+
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
+
     return sc
 
-if __name__ == '__main__':
+
+def save_file(filename, save_rdd):
+    if filename:
+        if save_rdd:
+            sm.RDD.saveAsPickleFile(filename)
+            logging.debug('RDD saved.')
+        else:
+            sm.labeled_points.saveAsPickleFile(filename)
+            logging.debug('Labeled points saved.')
+
+
+
+def build_model(sc, conn, **kwargs):
+    return SparkModel(sc, conn, **kwargs)
+
+
+def main(local, debug, save_rdd, **kwargs):
     logging.basicConfig(format='%(asctime)s %(message)s', filename='../logs/log.txt',level=logging.DEBUG)
     logging.debug('-'*40)
     logging.debug('-'*40)
     logging.debug('Execution time: %s' % str(datetime.now()))
 
-    with open('/root/.aws/credentials.json') as f:
-        CREDENTIALS = json.load(f)
+    # with open('~/.aws/credentials.json') as f:
+    #     CREDENTIALS = json.load(f)
 
-    # sc = SparkContext()
-    sc = set_spark_context()
+    sc = set_spark_context(local)
+    conn = S3Connection()
 
-    conn = S3Connection(CREDENTIALS['ACCESS_KEY'], CREDENTIALS['SECRET_ACCESS_KEY'])
+    filename = kwargs.pop('filename')
 
-    model_type = 'naive_bayes'
-    logging.debug('Model: %s' % model_type)
-
-    sm = SparkModel(sc, conn, model_type=model_type)
-    subs, clean_subs = sm.n_subs, len(sm.target)
+    logging.debug('Model: %s' % kwargs['model_type'])
+    sm = build_model(sc, conn, debug=debug, **kwargs)
 
     logging.debug('Files loaded.')
+
+    subs, clean_subs = sm.n_subs, sm.target.count()
     logging.debug('Percentage subs parsed: %.1f%%' % (100*float(clean_subs) / subs))
 
     sm.train()
+    logging.debug('Model trained.')
 
-    logging.debug('Model trained.'')
     score = sm.eval_score()
-
     logging.debug('Accuracy: %.2f\n' % score)
 
-    try:
-        sm.RDD.saveAsPickleFile('stemmed_RDD.pkl')
-        logging.debug('Saving complete.')
-    except:
-        logging.debug('Saving failed.')
+    save_file(filename, save_rdd)
 
     sc.stop()
+
+@click.group()
+def group():
+    pass
+
+@group.command()
+@click.option('--n_subs', default=1)
+@click.option('--model_type', default='naive_bayes')
+@click.option('--test_size', default=.2)
+@click.option('--rdd_path')
+@click.option('--lp_path')
+@click.option('--debug', is_flag=True)
+@click.option('--filename', default=None)
+@click.option('--save_rdd', is_flag=True)
+@click.option('--local', is_flag=True)
+def run(local, debug, save_rdd, **kwargs):
+    logging.basicConfig(format='%(asctime)s %(message)s', filename='../logs/log.txt',level=logging.DEBUG)
+    logging.debug('Got into run.')
+    main(local, debug, save_rdd, **kwargs)
+
+if __name__ == '__main__':
+    group()
