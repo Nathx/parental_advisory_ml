@@ -14,7 +14,6 @@ import logging
 
 def set_spark_context(local):
 
-    logging.debug('Configuring')
     APP_NAME = 'spark_model'
     conf = (SparkConf()
                 .setAppName(APP_NAME)
@@ -24,7 +23,6 @@ def set_spark_context(local):
         conf.setMaster('local[4]')
     else:
         conf.setMaster('spark://ec2-54-173-173-223.compute-1.amazonaws.com:7077')
-    logging.debug(conf.getAll())
 
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
 
@@ -35,10 +33,8 @@ def save_file(filename, save_rdd):
     if filename:
         if save_rdd:
             sm.RDD.saveAsPickleFile(filename)
-            logging.debug('RDD saved.')
         else:
             sm.labeled_points.saveAsPickleFile(filename)
-            logging.debug('Labeled points saved.')
 
 
 
@@ -52,9 +48,9 @@ def main(local, debug, save_rdd, **kwargs):
     main_log.setLevel(logging.DEBUG)
     handler = logging.FileHandler('../logs/log.txt')
     main_log.addHandler(handler)
-    logging.debug('-'*40)
-    logging.debug('-'*40)
-    logging.debug('Execution time: %s' % str(datetime.now()))
+    main_log.debug('-'*40)
+    main_log.debug('-'*40)
+    main_log.debug('Execution time: %s' % str(datetime.now()))
 
     # with open('~/.aws/credentials.json') as f:
     #     CREDENTIALS = json.load(f)
@@ -64,19 +60,19 @@ def main(local, debug, save_rdd, **kwargs):
 
     filename = kwargs.pop('filename')
 
-    logging.debug('Model: %s' % kwargs['model_type'])
+    main_log.debug('Model: %s' % kwargs['model_type'])
     sm = build_model(sc, conn, debug=debug, **kwargs)
 
-    logging.debug('Files loaded.')
+    main_log.debug('%s: Files loaded.' % str(datetime.now()))
 
     subs, clean_subs = sm.n_subs, sm.target.count()
-    logging.debug('Percentage subs parsed: %.1f%%' % (100*float(clean_subs) / subs))
+    main_log.debug('Percentage subs parsed: %.1f%%' % (100*float(clean_subs) / subs))
 
     sm.train()
-    logging.debug('Model trained.')
+    main_log.debug('%s: Model trained.' % str(datetime.now()))
 
     score = sm.eval_score()
-    logging.debug('Accuracy: %.2f\n' % score)
+    main_log.debug('Accuracy: %.2f\n' % score)
 
     save_file(filename, save_rdd)
 
