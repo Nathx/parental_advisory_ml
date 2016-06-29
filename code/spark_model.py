@@ -112,15 +112,33 @@ class SparkModel(object):
         """
         labels_rdd = self.extract_labels()
 
-        # now fully parallelized.
-        target = self.context.parallelize(self.bucket.list(
-            prefix=self.path_to_files)) \
-            .map(lambda key: (key, key.name.encode('utf-8').split('/')[-1])) \
-            .map(lambda (key, filename): (filename.split('.')[0], key)) \
-            .join(labels_rdd).values()
-        if self.n_subs:
-            fraction = float(self.n_subs) / target.count()
-            target = target.sample(withReplacement=False, fraction=fraction)
+        if n_subs > 0:
+            # if n_subs is passed as param, only read bucket until n_subs files
+            # are found
+            labels = dict(labels_rdd.collect())
+            for key in self.bucket.list(prefix=self.path_to_files):
+
+                 filename = key.name.encode('utf8').split('/')[1]
+                 file_id = filename.split('.')[0]
+
+                 if file_id in labels:
+                     rating = labels[file_id]
+                     target.append((key, rating))
+
+                     if len(target) == n_subs:
+                         break
+            return self.context.parallelize(target)
+
+        else:
+        # other read full list and parallelize
+            target = self.context.parallelize(self.bucket.list(
+                prefix=self.path_to_files)) \
+                .map(lambda key: (key, key.name.encode('utf-8').split('/')[-1])) \
+                .map(lambda (key, filename): (filename.split('.')[0], key)) \
+                .join(labels_rdd).values()
+            if self.n_subs:
+                fraction = float(self.n_subs) / target.count()
+                target = target.sample(withReplacement=False, fraction=fraction)
 
         return target
 
