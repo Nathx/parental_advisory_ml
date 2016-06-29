@@ -23,12 +23,14 @@ pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
 pip2.7 install gensim
+pip install click
 
 # EBS volume is mounted at /vol0, not enough room on root drive for NLTK data
 mkdir /mnt/nltk_data
 python27 -m nltk.downloader -d /mnt/nltk_data/ all
 echo 'export NLTK_DATA="/mnt/nltk_data"' >> ~/.bash_profile
 echo 'export SPARK_HOME=/root/spark' >> ~/.bash_profile
+echo 'export PATH=$PATH:$SCALA_HOME/bin:$SPARK_HOME/bin' >> ~/.bash_profile
 echo 'export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/build:$PYTHONPATH' >> ~/.bash_profile
 
 # changing Python version
