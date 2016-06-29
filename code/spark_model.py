@@ -23,7 +23,7 @@ pyspark_log.setLevel(logging.INFO)
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, n_subs=0, test_size=.2,
+    def __init__(self, sc, conn, n_subs=0, test_size=.2, subset='1968/',
                     model_type='naive_bayes', debug=False,
                     rdd_path=None, lp_path=None):
         # store parameters
@@ -40,7 +40,7 @@ class SparkModel(object):
         # Files location
         self.bucket = conn.get_bucket('subtitle_project')
         self.key_to_labels = self.bucket.get_key('data/labeled_df.csv')
-        self.path_to_files = 'data/xml_unzipped/en/'
+        self.path_to_files = 'data/xml_unzipped/en/' + subset
 
         # Preprocess the data unless learning features are already provided
         if lp_path:
@@ -90,13 +90,19 @@ class SparkModel(object):
         return self
 
 
-    def extract_labels(self):
+    def extract_labels(self, binary=True):
         """
         Loads labeled dataframe and extract list of labeled subtitle ids.
         """
-        labeled_df = pd.read_csv(self.key_to_labels)
-        labeled_df['IDSubtitle'] = labeled_df['IDSubtitle'].astype(int)
-        return labeled_df[['IDSubtitle', 'RATING']]
+        data = self.key_to_labels.get_contents_as_string()
+        valid_ratings = self.context.broadcast([u'R', u'PG-13', u'PG', u'G', u'NC-17'])
+        labels_rdd = self.context.parallelize(data.split('\n')) \
+                        .filter(lambda line: line != '' and not 'IDSubtitle' in line) \
+                        .map(lambda line: (line.split(',')[0], line.split(',')[1])) \
+                        .filter(lambda (file_id, rating): rating in valid_ratings.value)
+        if binary:
+            labels_rdd = labels_rdd.map(lambda (file_id, rating): (file_id, (rating != 'R')*'NOT_' + 'R'))
+        return labels_rdd.sortByKey().cache() # for lookups
 
 
     def map_files_to_target(self, n_subs=0, shuffle=False):
@@ -104,47 +110,19 @@ class SparkModel(object):
         Loops over the directory and grabs the filepath for each valid sub_id,
         then finds the corresponding target in the CSV of labels.
         """
-        labels = self.extract_labels()
+        labels_rdd = self.extract_labels()
 
-        target = []
+        # now fully parallelized.
+        target = self.context.parallelize(self.bucket.list(
+            prefix=self.path_to_files)) \
+            .map(lambda key: (key, key.name.encode('utf-8').split('/')[-1])) \
+            .map(lambda (key, filename): (filename.split('.')[0], key)) \
+            .join(labels_rdd).values()
+        if self.n_subs:
+            fraction = float(self.n_subs) / target.count()
+            target = target.sample(withReplacement=False, fraction=fraction)
 
-        sub_ids = labels.IDSubtitle.astype(str).values
-        ratings = labels.RATING.values
-
-
-        if n_subs > 0:
-            # look for filenames matching our labeled data
-            # stop early if n_subs is defined
-
-            for key in self.bucket.list(prefix=self.path_to_files):
-
-                filename = key.name.encode('utf-8').split('/')[-1]
-                file_id = filename.split('.')[0]
-
-                if (file_id in sub_ids):
-                    rating = ratings[np.where(sub_ids == file_id)][0]
-                    target.append((key, rating))
-
-                    if len(target) == n_subs:
-                        return self.context.parallelize(target)
-            return self.context.parallelize(target)
-        else:
-            # same as above, but parallelized
-            file_ids = self.context.parallelize(self.bucket.list(
-                prefix=self.path_to_files)).map(lambda key:
-                    (key, key.name.encode('utf-8').split('/')[-1])
-                ).map(lambda (key, filename): (key, filename.split('.')[0]))
-
-            sub_ids = self.context.broadcast(sub_ids)
-            ratings = self.context.broadcast(ratings)
-
-            # Filter out file_ids missing from labeled data and map to rating
-            target = file_ids.filter(lambda (key, file_id):
-                            file_id in sub_ids.value
-                        ).map(lambda (key, file_id):
-                                (key, ratings.value[np.where(file_id == sub_ids)][0])
-                        )
-            return target
+        return target
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
