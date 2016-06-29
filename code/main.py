@@ -15,7 +15,7 @@ import logging
 def set_spark_context(local):
 
     logging.debug('Configuring')
-    APP_NAME = 'spark_model'
+    APP_NAME = 'grid_search'
     conf = (SparkConf()
                 .setAppName(APP_NAME)
                 .set("spark.executor.cores", 4))
@@ -23,7 +23,7 @@ def set_spark_context(local):
     if local:
         conf.setMaster('local[4]')
     else:
-        conf.setMaster('spark://ec2-54-173-173-223.compute-1.amazonaws.com:7077')
+        conf.setMaster('spark://ec2-54-226-222-40.compute-1.amazonaws.com:7077')
     logging.debug(conf.getAll())
 
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
