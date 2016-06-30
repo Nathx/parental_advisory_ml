@@ -10,6 +10,9 @@ from pyspark.mllib.linalg import Vectors
 from pyspark.sql import SQLContext
 from pyspark.mllib.classification import NaiveBayes, LogisticRegressionWithLBFGS
 
+from boto.s3.bucket import Bucket
+from pyspark.rdd import RDD
+
 import nltk.data
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
@@ -69,16 +72,14 @@ class SparkModel(object):
             self.target = self.context.parallelize([
                 (self.bucket.get_key('data/xml_unzipped/en/1968/62909/6214054.xml'), 'G')
                 ])
-
             self.RDD = self.process_files()
-            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label))
+
         elif rdd_path:
             self.RDD = self.context.pickleFile(rdd_path)
-
-            self.target = self.labeled_points.map(lambda (key, lp): (key, lp.label))
+            self.target = self.get_target_from(self.RDD)
 
         else:
-            self.target = self.map_files_to_target(self.n_subs)
+            self.target = self.get_target_from(self.bucket, self.n_subs)
             self.RDD = self.process_files()
 
         self.target.cache()
@@ -104,24 +105,57 @@ class SparkModel(object):
         return labels_rdd.sortByKey().cache() # for lookups
 
 
-    def map_files_to_target(self, n_subs=0, shuffle=False):
+    def get_target_from(self, source, n_subs=0, shuffle=False):
         """
         Loops over the directory and grabs the filepath for each valid sub_id,
         then finds the corresponding target in the CSV of labels.
+        If n_subs is provided: early stop.
+        If source is of type RDD: map keys to labels.
         """
         labels_rdd = self.extract_labels()
 
-        # now fully parallelized.
-        target = self.context.parallelize(self.bucket.list(
-            prefix=self.path_to_files)) \
-            .map(lambda key: (key, key.name.encode('utf-8').split('/')[-1])) \
-            .map(lambda (key, filename): (filename.split('.')[0], key)) \
-            .join(labels_rdd).values()
-        if self.n_subs:
-            fraction = float(self.n_subs) / target.count()
-            target = target.sample(withReplacement=False, fraction=fraction)
+        if type(source) == Bucket:
+            if n_subs > 0:
+                # if n_subs is passed as param, only read bucket until n_subs files
+                # are found
+                target = []
+                labels = labels_rdd.collectAsMap()
 
-        return target
+                for key in self.bucket.list(prefix=self.path_to_files):
+
+                     filename = key.name.encode('utf8').split('/')[1]
+                     file_id = filename.split('.')[0]
+
+                     if file_id in labels:
+                         rating = labels[file_id]
+                         target.append((key, rating))
+
+                         if len(target) == n_subs:
+                             break
+
+                return self.context.parallelize(target)
+
+            else:
+            # otherwise read full list and parallelize
+                target = self.context.parallelize(self.bucket.list(
+                    prefix=self.path_to_files)) \
+                    .map(lambda key: (key, key.name.encode('utf-8').split('/')[-1])) \
+                    .map(lambda (key, filename): (filename.split('.')[0], key)) \
+                    .join(labels_rdd).values()
+
+                if self.n_subs:
+                    fraction = float(self.n_subs) / target.count()
+                    target = target.sample(withReplacement=False, fraction=fraction)
+
+                return target
+
+        elif type(source) == RDD:
+            return source.map(lambda (key, bow): (key, key.encode('utf-8').split('/')[-1])) \
+                    .map(lambda (key, filename): (filename.split('.')[0], key)) \
+                    .join(labels_rdd)
+                    .map(lambda (file_id, (key, label)): (key, label))
+        else:
+            raise TypeError("Source has unknown type.")
 
     def unique_ratings(self):
         """Returns list of possible ratings."""
