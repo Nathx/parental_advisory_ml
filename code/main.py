@@ -17,24 +17,26 @@ def set_spark_context(local):
     APP_NAME = 'grid_search'
     conf = (SparkConf()
                 .setAppName(APP_NAME)
-                .set("spark.executor.cores", 4))
+                .set("spark.executor.cores", 2))
 
     if local:
         conf.setMaster('local[4]')
     else:
-        conf.setMaster('spark://ec2-54-226-222-40.compute-1.amazonaws.com:7077')
+        with open('/root/spark-ec2/masters') as f:
+            uri = f.readline().strip('\n')
+        master = 'spark://%s:7077' % uri
+        conf.setMaster(master)
 
     sc = SparkContext(conf=conf, pyFiles=['document.py'])
 
     return sc
 
 
-def save_file(filename, save_rdd):
-    if filename:
-        if save_rdd:
-            sm.RDD.saveAsPickleFile(filename)
-        else:
-            sm.labeled_points.saveAsPickleFile(filename)
+def save_file(sm, rdd_path, lp_path):
+    if rdd_path:
+        sm.RDD.saveAsPickleFile(rdd_path)
+    if lp_path:
+        sm.labeled_points.saveAsPickleFile(lp_path)
 
 
 
@@ -42,7 +44,7 @@ def build_model(sc, conn, **kwargs):
     return SparkModel(sc, conn, **kwargs)
 
 
-def main(local, debug, save_rdd, **kwargs):
+def main(local, debug, save, **kwargs):
     logging.basicConfig(format='%(asctime)s %(message)s')
     main_log = logging.getLogger('main')
     main_log.setLevel(logging.DEBUG)
@@ -57,8 +59,9 @@ def main(local, debug, save_rdd, **kwargs):
 
     sc = set_spark_context(local)
     conn = S3Connection()
-
-    filename = kwargs.pop('filename')
+    if save:
+        rdd_path = kwargs.pop('rdd_path')
+        lp_path = kwargs.pop('lp_path')
 
     main_log.debug('Model: %s' % kwargs['model_type'])
     sm = build_model(sc, conn, debug=debug, **kwargs)
@@ -73,8 +76,8 @@ def main(local, debug, save_rdd, **kwargs):
 
     score = sm.eval_score()
     main_log.debug('Accuracy: %.2f\n' % score)
-
-    save_file(filename, save_rdd)
+    if save:
+        save_file(sm, rdd_path, lp_path)
 
     sc.stop()
 
@@ -86,14 +89,13 @@ def group():
 @click.option('--n_subs', default=1)
 @click.option('--model_type', default='naive_bayes')
 @click.option('--test_size', default=.2)
-@click.option('--rdd_path')
-@click.option('--lp_path')
 @click.option('--debug', is_flag=True)
-@click.option('--filename', default=None)
-@click.option('--save_rdd', is_flag=True)
+@click.option('--rdd_path', default=None)
+@click.option('--lp_path', default=None)
+@click.option('--save', is_flag=True)
 @click.option('--local', is_flag=True)
-def run(local, debug, save_rdd, **kwargs):
-    main(local, debug, save_rdd, **kwargs)
+def run(local, debug, save, **kwargs):
+    main(local, debug, save, **kwargs)
 
 if __name__ == '__main__':
     group()
