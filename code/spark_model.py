@@ -265,7 +265,8 @@ class SparkModel(object):
         test_data = test_rdd.map(lambda (key, (lp, label)): lp.features)
         predictions = self.predict(test_data)
 
-        truth = test_rdd.map(lambda (key, (lp, label)): label)
+        ratings = self.context.broadcast(self.unique_ratings())
+        truth = test_rdd.map(lambda (key, (lp, label)): ratings.value.index(label))
 
 
         self.score = truth.zip(predictions).map(lambda (y, y_pred): (y == y_pred)).mean()
