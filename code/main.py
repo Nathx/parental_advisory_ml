@@ -1,6 +1,6 @@
 from spark_model import SparkModel
 from datetime import datetime
-import socket
+import multiprocessing as mp
 
 from pyspark import SparkContext, SparkConf
 from boto.s3.connection import S3Connection
@@ -15,9 +15,10 @@ import logging
 def set_spark_context(local):
 
     APP_NAME = 'grid_search'
+    n_cores = mp.cpu_count()
     conf = (SparkConf()
                 .setAppName(APP_NAME)
-                .set("spark.executor.cores", 2))
+                .set("spark.executor.cores", n_cores))
 
     if local:
         conf.setMaster('local[4]')

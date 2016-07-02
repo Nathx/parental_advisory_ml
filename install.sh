@@ -17,7 +17,7 @@ pip2.7 install tornado==4.2
 
 pip2.7 install numpy
 # pip2.7 install matplotlib
-# pip2.7 install nltk
+pip2.7 install nltk
 pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
