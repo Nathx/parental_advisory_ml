@@ -18,7 +18,6 @@ pip2.7 install tornado==4.2
 pip2.7 install numpy
 # pip2.7 install matplotlib
 # pip2.7 install nltk
-pip2.7 install pandas
 pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
@@ -51,7 +50,6 @@ pssh -h /root/spark-ec2/slaves -v ln -s /usr/bin/python2.7 /usr/bin/python
 pssh -t 10000 -h /root/spark-ec2/slaves pip2.7 install numpy
 pssh -h /root/spark-ec2/slaves pip2.7 install nltk
 pssh -h /root/spark-ec2/slaves pip2.7 install gensim
-pssh -h /root/spark-ec2/slaves pip2.7 install pandas
 pssh -h /root/spark-ec2/slaves pip2.7 install boto
 pssh -h /root/spark-ec2/slaves pip2.7 install xmltodict
 pssh -h /root/spark-ec2/slaves pip2.7 install py4j
