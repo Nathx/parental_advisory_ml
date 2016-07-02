@@ -51,7 +51,7 @@ class SparkModel(object):
             self.target = self.labeled_points.map(lambda (key, lp):
                                                 (key, lp.label)).cache()
         else:
-            self.preprocess(rdd_path)
+            self.preprocess(self.rdd_path)
 
 
     def preprocess(self, rdd_path):
@@ -153,7 +153,7 @@ class SparkModel(object):
         elif type(source) == RDD:
             return source.map(lambda (key, bow): (key, key.encode('utf-8').split('/')[-1])) \
                     .map(lambda (key, filename): (filename.split('.')[0], key)) \
-                    .join(labels_rdd)
+                    .join(labels_rdd) \
                     .map(lambda (file_id, (key, label)): (key, label))
         else:
             raise TypeError("Source has unknown type.")
@@ -190,12 +190,14 @@ class SparkModel(object):
         porter = PorterStemmer()
 
         # transform doc into stemmed bag of words
-        clean_rdd = clean_rdd.mapValues(lambda x:
+        bow_rdd = clean_rdd.mapValues(lambda x:
                                 x.get_bag_of_words()).mapValues(
                                     lambda x: [porter.stem(word)
                                                 for word in x
                                                 if not word in stop])
-        return clean_rdd
+        meta_rdd = clean_rdd.mapValues(lambda x: x.meta)
+
+        return bow_rdd.join(meta_rdd)
 
     def extract_features(self, feat='tfidf', **kwargs):
         """
