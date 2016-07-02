@@ -17,8 +17,7 @@ pip2.7 install tornado==4.2
 
 pip2.7 install numpy
 # pip2.7 install matplotlib
-# pip2.7 install nltk
-pip2.7 install pandas
+pip2.7 install nltk
 pip2.7 install boto
 pip2.7 install xmltodict
 pip2.7 install py4j
@@ -27,7 +26,7 @@ pip install click
 
 # EBS volume is mounted at /vol0, not enough room on root drive for NLTK data
 mkdir /mnt/nltk_data
-python27 -m nltk.downloader -d /mnt/nltk_data/ all
+python27 -m nltk.downloader -d /mnt/nltk_data/ stopwords
 echo 'export NLTK_DATA="/mnt/nltk_data"' >> ~/.bash_profile
 echo 'export SPARK_HOME=/root/spark' >> ~/.bash_profile
 echo 'export PATH=$PATH:$SCALA_HOME/bin:$SPARK_HOME/bin' >> ~/.bash_profile
@@ -51,7 +50,6 @@ pssh -h /root/spark-ec2/slaves -v ln -s /usr/bin/python2.7 /usr/bin/python
 pssh -t 10000 -h /root/spark-ec2/slaves pip2.7 install numpy
 pssh -h /root/spark-ec2/slaves pip2.7 install nltk
 pssh -h /root/spark-ec2/slaves pip2.7 install gensim
-pssh -h /root/spark-ec2/slaves pip2.7 install pandas
 pssh -h /root/spark-ec2/slaves pip2.7 install boto
 pssh -h /root/spark-ec2/slaves pip2.7 install xmltodict
 pssh -h /root/spark-ec2/slaves pip2.7 install py4j

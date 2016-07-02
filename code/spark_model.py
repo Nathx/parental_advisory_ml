@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import os
 
 from document import Document
@@ -26,7 +25,7 @@ pyspark_log.setLevel(logging.INFO)
 
 class SparkModel(object):
 
-    def __init__(self, sc, conn, n_subs=0, test_size=.2, subset='1968/',
+    def __init__(self, sc, conn, n_subs=0, test_size=.2, subset='',
                     model_type='naive_bayes', debug=False,
                     rdd_path=None, lp_path=None):
         # store parameters
@@ -166,12 +165,13 @@ class SparkModel(object):
         """
         Transforms each subtitle file into its tokens.
         Stemmatization and stopwords removal are done here.
+        Pass meta data as a dictionary of values.
 
         Returns
         -----
         RDD of (key, value) pairs where:
         key: filepath
-        value: Stemmed Bag Of Words.
+        value: Stemmed Bag Of Words, metadata dictionary.
         """
         rdd = self.target \
                 .map(lambda (key, label): (key.name, Document(key, label)))
@@ -186,7 +186,7 @@ class SparkModel(object):
 
         # prepare for BOW cleaning
         nltk.data.path.append(os.environ['NLTK_DATA'])
-        stop = stopwords.words('english')
+        stop = self.context.broadcast(stopwords.words('english'))
         porter = PorterStemmer()
 
         # transform doc into stemmed bag of words
@@ -194,10 +194,11 @@ class SparkModel(object):
                                 x.get_bag_of_words()).mapValues(
                                     lambda x: [porter.stem(word)
                                                 for word in x
-                                                if not word in stop])
+                                                if not word in stop.value])
         meta_rdd = clean_rdd.mapValues(lambda x: x.meta)
 
         return bow_rdd.join(meta_rdd)
+
 
     def extract_features(self, feat='tfidf', **kwargs):
         """
