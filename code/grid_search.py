@@ -9,6 +9,23 @@ from pyspark.ml.classification import RandomForestClassifier, MultilayerPerceptr
 import numpy as np
 
 
+def set_spark_context():
+
+    APP_NAME = 'grid_search'
+    n_cores = 8
+    conf = (SparkConf()
+                .setAppName(APP_NAME)
+                .set("spark.executor.cores", n_cores))
+
+    with open('/root/spark-ec2/masters') as f:
+        uri = f.readline().strip('\n')
+    master = 'spark://%s:7077' % uri
+    conf.setMaster(master)
+
+    sc = SparkContext(conf=conf, pyFiles=['document.py'])
+
+    return sc
+
 def cross_val_score(pipeline, rdd, numFolds=3):
     cv_scores = []
     folds = rdd.randomSplit([1./numFolds]*numFolds)

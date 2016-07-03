@@ -14,7 +14,7 @@ import logging
 
 def set_spark_context(local):
 
-    APP_NAME = 'grid_search'
+    APP_NAME = 'main'
     n_cores = mp.cpu_count()
     conf = (SparkConf()
                 .setAppName(APP_NAME)
