@@ -9,6 +9,13 @@ from pyspark import SparkConf, SparkContext, SQLContext
 from pyspark.ml.feature import StringIndexer, StopWordsRemover, HashingTF, IDF
 from pyspark.ml.classification import LogisticRegression, GBTClassifier, NaiveBayes, RandomForestClassifier
 
+import logging
+
+logging.basicConfig(format='%(asctime)s %(message)s')
+blend_log = logging.getLogger('blend_log')
+blend_log.setLevel(logging.DEBUG)
+handler = logging.FileHandler('../logs/blend.txt')
+blend_log.addHandler(handler)
 
 
 def create_pipeline(model_type, num_features=10000):
@@ -60,8 +67,8 @@ def split_train_holdout(category_group, rdd):
     target = ids.join(target).map(lambda (file_id, (key, bow)): (key, bow))
 
     # build train and holdout (unlabeled) dataset
-    holdout = sqc.createDataFrame(sm.RDD.subtractByKey(target), ['key', 'bow'])
-    train = target.join(sm.RDD).map(lambda (key, (pred, bow)): (key, pred, bow))
+    holdout = sqc.createDataFrame(sm.RDD.subtractByKey(target), ['key', 'bow']).cache()
+    train = target.join(sm.RDD).map(lambda (key, (pred, bow)): (key, pred, bow)).cache()
 
     return holdout, train
 
@@ -77,12 +84,15 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     - Concatenates both to reconstruct the feature for the whole RDD.
     """
 
+    blend_log.debug('Begin blending category %s' % category)
+
     folds = train.randomSplit([1./num_folds]*num_folds)
 
     blend_predictions = []
     holdout_predictions = []
 
-    for test in folds:
+    for i, test in enumerate(folds):
+        blend_log.debug('Fold %s' % i)
         # exclude test fold, join all others and convert both to dataframes
         train = [fold for fold in folds if fold != test]
         train_df = sqc.createDataFrame(sc.union(train), ['key', 'label', 'bow'])
@@ -92,7 +102,7 @@ def make_blend(category, holdout, train, pipeline, num_folds):
         model = pipeline.fit(train_df)
 
         # get probabilities for test and holdout set, then store in arrays
-        test_rdd = model.transform(test_df).rdd.map(lambda row: (row.key, row.probability[1]))
+        test_rdd = model.transform(test_df).rdd.map(lambda row: (row.key, float(row.probability[1])))
         holdout_pred = model.transform(holdout).rdd.map(lambda row: (row.key, row.probability[1]))
         blend_predictions.append(test_rdd)
         holdout_predictions.append(holdout_pred)
@@ -106,6 +116,8 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     # create dataframes and concatenate
     holdout_df = sqc.createDataFrame(holdout_rdd, ['key', category])
     pred_df = sqc.createDataFrame(sc.union(blend_predictions), ['key', category])
+
+    blend_log.debug('Finish blending category %s' % category)
 
     return holdout_df.unionAll(pred_df)
 
@@ -134,6 +146,11 @@ def make_blend(category, holdout, train, pipeline, num_folds):
 
 if __name__ == '__main__':
 
+
+    main_log.debug('-'*40)
+    main_log.debug('-'*40)
+    main_log.debug('Execution time: %s' % str(datetime.now()))
+
     sc = set_spark_context()
 
     conn = S3Connection()
@@ -142,3 +159,5 @@ if __name__ == '__main__':
 
     sm = SparkModel(sc, conn, rdd_path='rdd.pkl')
     features_df = get_all_blends(sm, key, 'log_reg')
+
+    features_df.write.parquet('blended_features.parquet')
