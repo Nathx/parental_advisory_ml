@@ -195,9 +195,9 @@ class SparkModel(object):
                                     lambda x: [porter.stem(word)
                                                 for word in x
                                                 if not word in stop.value])
-        meta_rdd = clean_rdd.mapValues(lambda x: x.meta)
+        # meta_rdd = clean_rdd.mapValues(lambda x: x.meta)
 
-        return bow_rdd.join(meta_rdd)
+        return bow_rdd # .join(meta_rdd)
 
 
     def extract_features(self, feat='tfidf', **kwargs):

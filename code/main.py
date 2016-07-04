@@ -34,7 +34,7 @@ def set_spark_context(local):
 
 
 def save_file(sm, rdd_path, lp_path):
-    if rdd_path:
+    if rdd_path and hasattr(sm, 'RDD'):
         sm.RDD.saveAsPickleFile(rdd_path)
     if lp_path and hasattr(sm, 'labeled_points'):
         sm.labeled_points.saveAsPickleFile(lp_path)
