@@ -3,6 +3,7 @@ from spark_model import SparkModel
 from datetime import datetime
 from pyspark.ml import Pipeline
 import numpy as np
+import pandas as pd
 
 from boto.s3.connection import S3Connection
 from pyspark import SparkConf, SparkContext, SQLContext
@@ -59,7 +60,7 @@ def split_train_holdout(category_group, rdd):
 
     # convert pandas dataframe in RDD (subtitle_id, doc2vec prediction)
     target = sc.parallelize(category_group[['IDSubtitle', 'prediction']] \
-                .to_dict(orient='records')) \
+                .to_dict(orient='records'), 150) \
                 .map(lambda x: (str(int(x['IDSubtitle'])), float(x['prediction'])))
 
     # map id to key name
@@ -85,7 +86,7 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     """
 
     blend_log.debug('Begin blending category %s' % category)
-
+    train = train.repartition(300)
     folds = train.randomSplit([1./num_folds]*num_folds)
 
     blend_predictions = []
@@ -94,8 +95,8 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     for i, test in enumerate(folds):
         blend_log.debug('Fold %s' % i)
         # exclude test fold, join all others and convert both to dataframes
-        train = [fold for fold in folds if fold != test]
-        train_df = sqc.createDataFrame(sc.union(train), ['key', 'label', 'bow'])
+        train_folds = [fold for fold in folds if fold != test]
+        train_df = sqc.createDataFrame(sc.union(train_folds), ['key', 'label', 'bow'])
         test_df = sqc.createDataFrame(test, ['key', 'label', 'bow'])
 
         # train model
@@ -132,7 +133,7 @@ def get_all_blends(sm, key, model_type, **kwargs):
     features = []
 
     for category, group in target.groupby('sentiment'):
-        holdout, train = split_train_holdout(group, sm.rdd)
+        holdout, train = split_train_holdout(group, sm.RDD)
         feature_vector = make_blend(category, holdout, train, pipeline, 5)
         features.append(feature_vector)
 
@@ -152,6 +153,7 @@ if __name__ == '__main__':
     blend_log.debug('Execution time: %s' % str(datetime.now()))
 
     sc = set_spark_context()
+    sqc = SQLContext(sc)
 
     conn = S3Connection()
     bucket = conn.get_bucket('subtitle_project')
