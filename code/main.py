@@ -2,7 +2,6 @@ from spark_model import SparkModel
 from datetime import datetime
 import multiprocessing as mp
 
-from pyspark import SparkContext, SparkConf
 from boto.s3.connection import S3Connection
 from pyspark import SparkConf, SparkContext
 
@@ -12,7 +11,7 @@ import click
 import logging
 
 
-def set_spark_context(local):
+def set_spark_context(local=False):
 
     APP_NAME = 'main'
     n_cores = mp.cpu_count()
