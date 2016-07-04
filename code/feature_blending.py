@@ -147,9 +147,9 @@ def make_blend(category, holdout, train, pipeline, num_folds):
 if __name__ == '__main__':
 
 
-    main_log.debug('-'*40)
-    main_log.debug('-'*40)
-    main_log.debug('Execution time: %s' % str(datetime.now()))
+    blend_log.debug('-'*40)
+    blend_log.debug('-'*40)
+    blend_log.debug('Execution time: %s' % str(datetime.now()))
 
     sc = set_spark_context()
 
