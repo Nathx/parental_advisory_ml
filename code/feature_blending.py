@@ -113,10 +113,10 @@ def make_blend(category, holdout, train, pipeline, num_folds):
             holdout_rdd = holdout_pred
         else:
             blend_rdd = blend_rdd.union(test_pred)
-            holdout_rdd = holdout_rdd.join(holdout_pred)
+            holdout_rdd = holdout_rdd.join(holdout_pred).map(lambda (key, (x, y)): (key, x + y))
 
     # average holdout predictions
-    holdout_rdd = holdout_rdd.mapValues(lambda x: float(np.mean(x)))
+    holdout_rdd = holdout_rdd.mapValues(lambda x: float(x / num_folds))
 
     # create dataframes and concatenate
     holdout_df = sqc.createDataFrame(holdout_rdd, ['key', category])
