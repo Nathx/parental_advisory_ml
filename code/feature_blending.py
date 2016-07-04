@@ -73,6 +73,19 @@ def split_train_holdout(category_group, rdd):
 
     return holdout, train
 
+def get_predictions(holdout, train_rdd, test_rdd):
+    train_df = sqc.createDataFrame(sc.union(train_folds), ['key', 'label', 'bow']).persist()
+    test_df = sqc.createDataFrame(test_rdd, ['key', 'label', 'bow']).persist()
+
+    # train model
+    model = pipeline.fit(train_df)
+
+    # get probabilities for test and holdout set, then store in arrays
+    test_pred = model.transform(test_df).rdd.map(lambda row: (row.key, float(row.probability[1])))
+    holdout_pred = model.transform(holdout).rdd.map(lambda row: (row.key, row.probability[1]))
+
+    return test_pred, holdout_pred
+
 def make_blend(category, holdout, train, pipeline, num_folds):
     """
     - Trains the pipeline on (n-1) folds of the train dataset.
@@ -89,34 +102,25 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     train = train.repartition(300)
     folds = train.randomSplit([1./num_folds]*num_folds)
 
-    blend_predictions = []
-    holdout_predictions = []
-
-    for i, test in enumerate(folds):
+    for i, test_rdd in enumerate(folds):
         blend_log.debug('Fold %s' % i)
         # exclude test fold, join all others and convert both to dataframes
-        train_folds = [fold for fold in folds if fold != test]
-        train_df = sqc.createDataFrame(sc.union(train_folds), ['key', 'label', 'bow'])
-        test_df = sqc.createDataFrame(test, ['key', 'label', 'bow'])
+        train_rdd = sc.union([fold for fold in folds if fold != test]).repartition(150)
+        test_pred, holdout_pred = get_predictions(holdout, train_rdd, test_rdd)
 
-        # train model
-        model = pipeline.fit(train_df)
+        if i == 0:
+            blend_rdd = test_pred
+            holdout_rdd = holdout_pred
+        else:
+            blend_rdd = blend_rdd.union(test_pred)
+            holdout_rdd = holdout_rdd.join(holdout_pred)
 
-        # get probabilities for test and holdout set, then store in arrays
-        test_rdd = model.transform(test_df).rdd.map(lambda row: (row.key, float(row.probability[1])))
-        holdout_pred = model.transform(holdout).rdd.map(lambda row: (row.key, row.probability[1]))
-        blend_predictions.append(test_rdd)
-        holdout_predictions.append(holdout_pred)
-
-    # join all holdout predictions and average
-    holdout_rdd = holdout_predictions.pop()
-    for rdd in holdout_predictions:
-        holdout_rdd.join(rdd)
+    # average holdout predictions
     holdout_rdd = holdout_rdd.mapValues(lambda x: float(np.mean(x)))
 
     # create dataframes and concatenate
     holdout_df = sqc.createDataFrame(holdout_rdd, ['key', category])
-    pred_df = sqc.createDataFrame(sc.union(blend_predictions), ['key', category])
+    pred_df = sqc.createDataFrame(blend_rdd, ['key', category])
 
     blend_log.debug('Finish blending category %s' % category)
 
