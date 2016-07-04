@@ -78,6 +78,7 @@ if __name__ == '__main__':
         n = len(corpus)
 
         fname = '../data/' + category + '_doc2vec.model'
+
         if os.path.exists(fname):
             continue
 

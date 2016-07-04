@@ -315,7 +315,3 @@ class SparkModel(object):
         # elif self
 
         return self
-
-
-    def train_doc2vec():
-        pass

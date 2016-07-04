@@ -43,6 +43,7 @@ def import_comments():
         "violence_gore": 1,
         "sex_nudity": 1,
         "frightening_intense_scenes": 1,
+        "profanity": 1,
         "_id": 0
     })))
 
