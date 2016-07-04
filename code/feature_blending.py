@@ -73,8 +73,8 @@ def split_train_holdout(category_group, rdd):
 
     return holdout, train
 
-def get_predictions(holdout, train_rdd, test_rdd):
-    train_df = sqc.createDataFrame(sc.union(train_folds), ['key', 'label', 'bow']).persist()
+def get_predictions(pipeline, holdout, train_rdd, test_rdd):
+    train_df = sqc.createDataFrame(train_rdd, ['key', 'label', 'bow']).persist()
     test_df = sqc.createDataFrame(test_rdd, ['key', 'label', 'bow']).persist()
 
     # train model
@@ -105,8 +105,8 @@ def make_blend(category, holdout, train, pipeline, num_folds):
     for i, test_rdd in enumerate(folds):
         blend_log.debug('Fold %s' % i)
         # exclude test fold, join all others and convert both to dataframes
-        train_rdd = sc.union([fold for fold in folds if fold != test]).repartition(150)
-        test_pred, holdout_pred = get_predictions(holdout, train_rdd, test_rdd)
+        train_rdd = sc.union([fold for fold in folds if fold != test_rdd]).repartition(150)
+        test_pred, holdout_pred = get_predictions(pipeline, holdout, train_rdd, test_rdd)
 
         if i == 0:
             blend_rdd = test_pred
