@@ -6,6 +6,7 @@ from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.feature import StopWordsRemover, HashingTF, IDF, StringIndexer
 from pyspark.ml.classification import MultilayerPerceptronClassifier
+from datetime import datetime
 import numpy as np
 import logging
 
@@ -62,14 +63,12 @@ if __name__ == '__main__':
     # with open('~/.aws/credentials.json') as f:
     #     CREDENTIALS = json.load(f)
 
-    sc = set_spark_context(local)
+    sc = set_spark_context()
 
     conn = S3Connection()
     sqc = SQLContext(sc)
-    sm = SparkModel(sc, conn, rdd_path='meta_rdd.pkl')
+    sm = SparkModel(sc, conn, rdd_path='rdd.pkl')
 
-    bow_rdd = sm.RDD.map(lambda (key, (bow, meta)): (key, bow))
-    bow_rdd = sm.RDD.join(sm.target).map(lambda (key, (bow, label)): (label, bow))
 
     bow_rdd = sm.RDD.join(sm.target).map(lambda (key, (bow, label)): (label, bow)) \
             .sample(withReplacement=False, fraction=.5, seed=1)

@@ -1,4 +1,5 @@
 from spark_model import SparkModel
+from pyspark import SQLContext, SparkContext, SparkConf
 from boto.s3.connection import S3Connection
 from pyspark.ml import Pipeline
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
@@ -7,7 +8,7 @@ from pyspark.ml.feature import StopWordsRemover, NGram, HashingTF, IDF, StringIn
 from pyspark.ml.classification import LogisticRegression, GBTClassifier
 from pyspark.ml.classification import RandomForestClassifier, MultilayerPerceptronClassifier
 import numpy as np
-
+import logging
 
 def set_spark_context():
 
@@ -47,8 +48,15 @@ def cross_val_score(pipeline, rdd, numFolds=3):
 
 if __name__ == '__main__':
     conn = S3Connection()
+    sc = set_spark_context()
     sqc = SQLContext(sc)
     sm = SparkModel(sc, conn, rdd_path='meta_rdd.pkl')
+
+    logging.basicConfig(format='%(asctime)s %(message)s')
+    grid_search = logging.getLogger('main')
+    grid_search.setLevel(logging.DEBUG)
+    handler = logging.FileHandler('../logs/grid_search.txt')
+    grid_search.addHandler(handler)
 
     bow_rdd = sm.RDD.map(lambda (key, (bow, meta)): (key, bow))
     bow_rdd = sm.RDD.join(sm.target).map(lambda (key, (bow, label)): (label, bow))
@@ -60,13 +68,14 @@ if __name__ == '__main__':
                 minDocFreq=20)
     indexer = StringIndexer(inputCol="string_label", outputCol="label")
 
-    for model in [GBTClassifier(), RandomForestClassifier(), MultiLayerPerceptronClassifier()]:
+    for model in [GBTClassifier(), RandomForestClassifier(), MultilayerPerceptronClassifier()]:
 
-        if type(model) == MultiLayerPerceptronClassifier:
+        if type(model) == MultilayerPerceptronClassifier:
             layers = [10000, 100, 2]
-            model = MultiLayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128)
+            model = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128)
 
         pipeline = Pipeline(stages=[remover, hashingTF, tfidf, # scaler,
                                     indexer, model])
         scores = cross_val_score(pipeline, bow_rdd)
-        print type(model), scores, scores.mean()
+        grid_search.debug('Model: %s\nscores: %s\nAverage: %s' \
+                % (type(model), scores, scores.mean()))

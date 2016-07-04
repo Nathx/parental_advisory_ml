@@ -35,8 +35,9 @@ def set_spark_context(local=False):
 def save_file(sm, rdd_path, lp_path):
     if rdd_path:
         sm.RDD.saveAsPickleFile(rdd_path)
-    if lp_path:
+    if lp_path and hasattr(sm, 'labeled_points'):
         sm.labeled_points.saveAsPickleFile(lp_path)
+        
 
 
 
@@ -44,7 +45,7 @@ def build_model(sc, conn, **kwargs):
     return SparkModel(sc, conn, **kwargs)
 
 
-def main(local, debug, save, **kwargs):
+def main(local, debug, save, train, **kwargs):
     logging.basicConfig(format='%(asctime)s %(message)s')
     main_log = logging.getLogger('main')
     main_log.setLevel(logging.DEBUG)
@@ -70,12 +71,12 @@ def main(local, debug, save, **kwargs):
 
     subs, clean_subs = sm.n_subs, sm.target.count()
     main_log.debug('Percentage subs parsed: %.1f%%' % (100*float(clean_subs) / subs))
+    if train:
+        sm.train()
+        main_log.debug('%s: Model trained.' % str(datetime.now()))
 
-    sm.train()
-    main_log.debug('%s: Model trained.' % str(datetime.now()))
-
-    score = sm.eval_score()
-    main_log.debug('Accuracy: %.2f\n' % score)
+        score = sm.eval_score()
+        main_log.debug('Accuracy: %.2f\n' % score)
     if save:
         save_file(sm, rdd_path, lp_path)
 
@@ -94,8 +95,9 @@ def group():
 @click.option('--lp_path', default=None)
 @click.option('--save', is_flag=True)
 @click.option('--local', is_flag=True)
-def run(local, debug, save, **kwargs):
-    main(local, debug, save, **kwargs)
+@click.option('--train', is_flag=True)
+def run(local, debug, save, train, **kwargs):
+    main(local, debug, save, train, **kwargs)
 
 if __name__ == '__main__':
     group()
