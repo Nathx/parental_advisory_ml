@@ -121,26 +121,26 @@ def make_blend(category, holdout, train, pipeline, num_folds):
 
     return holdout_df.unionAll(pred_df)
 
-    def get_all_blends(sm, key, model_type, **kwargs):
-        """
-        Loop over all categories and reconstruct full dataset with one
-        feature for each rating dimension.
-        """
+def get_all_blends(sm, key, model_type, **kwargs):
+    """
+    Loop over all categories and reconstruct full dataset with one
+    feature for each rating dimension.
+    """
 
-        target = load_target(key)
-        pipeline = create_pipeline(model_type)
-        features = []
+    target = load_target(key)
+    pipeline = create_pipeline(model_type)
+    features = []
 
-        for category, group in target.groupby('sentiment'):
-            holdout, train = split_train_holdout(group, sm.rdd)
-            feature_vector = make_blend(category, holdout, train, pipeline, 5)
-            features.append(feature_vector)
+    for category, group in target.groupby('sentiment'):
+        holdout, train = split_train_holdout(group, sm.rdd)
+        feature_vector = make_blend(category, holdout, train, pipeline, 5)
+        features.append(feature_vector)
 
-        features_df = features.pop()
-        for feature in features:
-            features_df = features_df.join(feature, on='key')
+    features_df = features.pop()
+    for feature in features:
+        features_df = features_df.join(feature, on='key')
 
-        return features_df
+    return features_df
 
 
 
