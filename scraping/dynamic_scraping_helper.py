@@ -1,6 +1,9 @@
 import time
 
 def wait_for(condition_function):
+    """
+    Sleep and retry every 0.1 seconds.
+    """
     start_time = time.time()
     while time.time() < start_time + 5:
         if condition_function():
@@ -8,8 +11,11 @@ def wait_for(condition_function):
         else:
             time.sleep(0.1)
 
-class wait_for_page_load(object):
-
+class WaitForPageLoad(object):
+    """
+    Wrapper to detect change of page before scraping content.
+    """
+    
     def __init__(self, browser):
         self.browser = browser
 

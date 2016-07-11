@@ -1,3 +1,6 @@
+# This script experiments with word2vec to cluster the target based on MPAA
+# descriptions.
+
 from gensim.models import Word2Vec
 import logging
 import seaborn as sns

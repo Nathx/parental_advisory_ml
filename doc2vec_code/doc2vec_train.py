@@ -29,7 +29,7 @@ def build_corpus(group):
 
 def train_doc2vec(sentences, **kwargs):
     """
-    Train doc2vec with guestimate of best params.
+    Train doc2vec with best params from CV.
     Pass parameters in kwargs to overwrite.
     Returns model trained on sentences.
     """

@@ -87,16 +87,20 @@ def group():
     pass
 
 @group.command()
-@click.option('--n_subs', default=1)
-@click.option('--model_type', default='naive_bayes')
-@click.option('--test_size', default=.2)
-@click.option('--debug', is_flag=True)
-@click.option('--rdd_path', default=None)
-@click.option('--lp_path', default=None)
-@click.option('--save', is_flag=True)
-@click.option('--local', is_flag=True)
-@click.option('--train', is_flag=True)
+@click.option('--n_subs', default=1, help='Number of subtitle files, set 0 for all.')
+@click.option('--model_type', default='naive_bayes', help='Model to run, can take values "naive_bayes" or "log_reg".')
+@click.option('--test_size', default=.2, help='Ratio of the dataset to use as test data.')
+@click.option('--debug', is_flag=True, help='Use this flag to try a full run with 1 subtitle.')
+@click.option('--rdd_path', default=None, help='Location of the RDD pickle file to load/save depending on --save flag.')
+@click.option('--lp_path', default=None, help='Location of the LabeledPoint pickle file to load/save depending on --save flag.')
+@click.option('--save', is_flag=True, help='If used, intermediary files will be saved to the provided paths.')
+@click.option('--local', is_flag=True, help='Use to run the pipeline locally.')
+@click.option('--train', is_flag=True, help='Use to include training in the pipeline.')
 def run(local, debug, save, train, **kwargs):
+    """
+    This commands instantiates a model and 
+    executes the full pipeline.
+    """
     main(local, debug, save, train, **kwargs)
 
 if __name__ == '__main__':

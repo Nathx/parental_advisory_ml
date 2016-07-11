@@ -11,16 +11,16 @@ import os
 
 
 def fetch_source(driver, url):
-    with h.wait_for_page_load(driver):
+    with h.WaitForPageLoad(driver):
         driver.get(url)
-    with h.wait_for_page_load(driver):
+    with h.WaitForPageLoad(driver):
         driver.find_element_by_xpath('//a[@href="javascript:handleFullResults();"]').click()
 
     driver.switch_to_window(driver.window_handles[1])
     try:
         source = driver.page_source
     except:
-        with h.wait_for_page_load(driver):
+        with h.WaitForPageLoad(driver):
             source = driver.page_source
 
     driver.close()
