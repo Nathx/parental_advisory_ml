@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # This script maps together the different dataframes collected from IMDB and
-# OpenSubtitles. It uses multiprocessing and Levenshtein distance to join
+# OpenSubtitles. It uses multiprocessing and fuzzy matching to join
 # movies on titles.
 
 import pandas as pd
