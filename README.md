@@ -21,7 +21,7 @@ The code is written in Python and makes use of the following libraries:
     * [Pymongo](https://api.mongodb.com/python/current/): Python interface for MongoDB
     * [Gensim](https://radimrehurek.com/gensim/index.html): NLP framework with [doc2vec](http://arxiv.org/pdf/1405.4053v2.pdf) implementation
 
-The whole project has been done in 2 weeks in the context of Galvanize's data science program. This README details the methodology and reflects the content of this repository.
+This README details the methodology and reflects the content of this repository.
 
 ## TL; DR
 
